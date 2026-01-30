@@ -1,0 +1,28 @@
+# Docker Compose - Run backend + MongoDB (for local dev / testing)
+# Use this to run the full stack without installing MongoDB locally
+
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      NODE_ENV: development
+      PORT: 8080
+      MONGODB_URI: mongodb://mongo:27017/oly-backend
+    depends_on:
+      - mongo
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+volumes:
+  mongo_data:

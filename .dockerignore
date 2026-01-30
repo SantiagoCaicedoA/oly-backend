@@ -1,0 +1,29 @@
+# Dependencies (reinstalled in container)
+node_modules
+npm-debug.log*
+
+# Environment and secrets (pass at runtime)
+.env
+.env.*
+!.env.example
+
+# Git and IDE
+.git
+.gitignore
+.cursor
+.vscode
+*.swp
+*.swo
+.DS_Store
+
+# Documentation and misc (optional - remove if you want them in image)
+README.md
+*.md
+
+# Tests and dev tooling (not needed in production image)
+coverage
+.nyc_output
+*.test.js
+*.spec.js
+__tests__
+verify_schemas.js
