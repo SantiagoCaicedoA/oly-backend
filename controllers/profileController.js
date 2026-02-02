@@ -1,28 +1,33 @@
-const AthleteProfile = require('../models/AthleteProfile');
+const User = require('../models/User');
 const { deepMerge } = require('../utils/mergeProfile');
+const { normalizeProfilePayload } = require('../utils/normalizeProfileEnums');
 
-// Optional initial profile fields on POST (create after signup). Signup itself is name, email, password on User.
 const INITIAL_PROFILE_FIELDS = ['display_name', 'country', 'age'];
+
+function hasProfileData(profile) {
+  if (!profile || typeof profile !== 'object') return false;
+  return Object.keys(profile).length > 0;
+}
 
 class ProfileController {
   /**
-   * GET /api/profile – Get current user's profile
+   * GET /api/profile – Get current user's profile (from same User document)
    */
   async getProfile(req, res, next) {
     try {
-      const profile = await AthleteProfile.findOne({ user: req.user._id });
+      const profile = req.user.profile;
 
-      if (!profile) {
+      if (!hasProfileData(profile)) {
         return res.status(200).json({
           success: true,
           data: null,
-          message: 'No profile found. Create profile with POST /api/profile first.'
+          message: 'No profile found. Create profile with POST /api/profile first.',
         });
       }
 
       res.status(200).json({
         success: true,
-        data: profile
+        data: profile,
       });
     } catch (error) {
       next(error);
@@ -30,18 +35,15 @@ class ProfileController {
   }
 
   /**
-   * POST /api/profile – Create profile (call once after user signup).
-   * Optional body: display_name, country, age. Signup is name, email, password on POST /api/users.
+   * POST /api/profile – Create profile (call once after signup).
+   * Optional body: display_name, country, age.
    */
   async createProfile(req, res, next) {
     try {
-      const userId = req.user._id;
-
-      const existingProfile = await AthleteProfile.findOne({ user: userId });
-      if (existingProfile) {
+      if (hasProfileData(req.user.profile)) {
         return res.status(400).json({
           success: false,
-          message: 'Profile already exists. Use PUT /api/profile with full onboarding data.'
+          message: 'Profile already exists. Use PUT /api/profile with full onboarding data.',
         });
       }
 
@@ -49,17 +51,15 @@ class ProfileController {
       for (const key of INITIAL_PROFILE_FIELDS) {
         if (req.body[key] !== undefined) payload[key] = req.body[key];
       }
+      normalizeProfilePayload(payload);
 
-      const profile = new AthleteProfile({
-        user: userId,
-        ...payload
-      });
-      await profile.save();
+      req.user.profile = payload;
+      await req.user.save();
 
       res.status(201).json({
         success: true,
-        data: profile,
-        message: 'Profile created. Complete onboarding and send all data in one PUT /api/profile.'
+        data: req.user.profile,
+        message: 'Profile created. Complete onboarding and send all data in one PUT /api/profile.',
       });
     } catch (error) {
       next(error);
@@ -68,39 +68,28 @@ class ProfileController {
 
   /**
    * PUT /api/profile – Update profile with full onboarding data in one hit.
-   * Call once when user completes the 9th onboarding screen; send all 9 screens'
-   * data in one request. Accepts full profile payload (merge into existing).
-   * If no profile exists, one is created.
+   * Call once on 9th onboarding screen with all 9 screens' data.
    */
   async updateProfile(req, res, next) {
     try {
-      const userId = req.user._id;
       const body = { ...req.body };
-      delete body.user; // never allow changing owner
+      delete body.user;
+      normalizeProfilePayload(body);
 
-      let profile = await AthleteProfile.findOne({ user: userId });
-
-      if (profile) {
-        const merged = deepMerge(profile.toObject(), body);
-        delete merged._id;
-        delete merged.__v;
-        delete merged.user;
-        delete merged.createdAt;
-        delete merged.updatedAt;
-        profile.set(merged);
-        await profile.save();
-      } else {
-        profile = new AthleteProfile({
-          user: userId,
-          ...body
-        });
-        await profile.save();
-      }
+      const current =
+        req.user.profile && typeof req.user.profile.toObject === 'function'
+          ? req.user.profile.toObject()
+          : req.user.profile
+            ? { ...req.user.profile }
+            : {};
+      const merged = deepMerge(current, body);
+      req.user.profile = merged;
+      await req.user.save();
 
       res.status(200).json({
         success: true,
-        data: profile,
-        message: 'Profile updated successfully'
+        data: req.user.profile,
+        message: 'Profile updated successfully',
       });
     } catch (error) {
       next(error);

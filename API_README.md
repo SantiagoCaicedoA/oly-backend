@@ -3,7 +3,8 @@
 This file documents **Signup**, **Signin**, and **Profile PUT** with request/response and detailed payloads.
 
 - **Base URL:** `/api` (e.g. `http://localhost:8080/api`)
-- **Auth for profile:** send header `x-user-id: <userId>` (use the user `_id` from signup or signin response).
+- **Auth for profile / me:** send header `x-user-id: <userId>` (use the user `_id` from signup or signin response).
+- **Profile** is stored **inside the User document** (`user.profile`). One read gives user + profile.
 
 ---
 
@@ -131,7 +132,13 @@ curl -X POST http://localhost:8080/api/users/signin \
 
 ---
 
-## 3. Profile – PUT (full onboarding payload)
+## 3. Get current user (with profile)
+
+Returns the **complete user** (no password) including **profile** in one response. Use **GET /api/users/me** with header `x-user-id: <userId>`. Response: `{ success: true, data: { _id, name, email, createdAt, updatedAt, profile: { ... } } }`. If profile not completed, `profile` may be null or empty.
+
+---
+
+## 4. Profile – PUT (full onboarding payload)
 
 Updates the current user’s profile. Call **once** when the user completes the 9th onboarding screen and send **all 9 screens’ data** in one request. Existing profile is merged with the payload (nested objects are deep-merged).
 
@@ -346,8 +353,9 @@ curl -X PUT http://localhost:8080/api/profile \
 
 ## Quick reference
 
-| Action        | Method | Endpoint              | Auth     |
-|---------------|--------|------------------------|----------|
-| Signup        | POST   | `/api/users`           | None     |
-| Signin        | POST   | `/api/users/signin`    | None     |
-| Update profile| PUT    | `/api/profile`         | `x-user-id` |
+| Action              | Method | Endpoint              | Auth       |
+|---------------------|--------|------------------------|------------|
+| Signup              | POST   | `/api/users`           | None       |
+| Signin              | POST   | `/api/users/signin`    | None       |
+| **Get current user + profile** | GET    | `/api/users/me`        | `x-user-id` |
+| Update profile      | PUT    | `/api/profile`         | `x-user-id` |

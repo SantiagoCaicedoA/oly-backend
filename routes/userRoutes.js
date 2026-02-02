@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
+const auth = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
 
 // Validation middleware – returns consistent { success: false, message, errors }
@@ -45,6 +46,7 @@ const signinValidation = [
 // Routes
 router.get('/', userController.getAllUsers.bind(userController));
 router.post('/signin', signinValidation, validate, userController.signin.bind(userController));
+router.get('/me', auth, userController.getMe.bind(userController));
 router.get('/:id', userController.getUserById.bind(userController));
 // Signup: POST with name, email, password only
 router.post(

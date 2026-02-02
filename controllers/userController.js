@@ -21,6 +21,22 @@ class UserController {
   }
 
   /**
+   * GET /api/users/me – Current user with profile in one response (requires x-user-id).
+   */
+  async getMe(req, res, next) {
+    try {
+      const user = req.user.toObject();
+      delete user.password;
+      res.status(200).json({
+        success: true,
+        data: user,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * Get user by ID
    * @param {Object} req
    * @param {Object} res

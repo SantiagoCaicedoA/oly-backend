@@ -90,18 +90,20 @@ oly backend/
 - `GET /api/health` - Check API status
 
 ### Users / Signup
-- `GET /api/users` - Get all users
-- `GET /api/users/:id` - Get user by ID
+- `GET /api/users` - Get all users (includes `profile` in each user)
+- **`GET /api/users/me`** - **Current user + profile in one response** (auth: `x-user-id`). Use this when you need the complete user.
+- `GET /api/users/:id` - Get user by ID (includes `profile`)
 - **`POST /api/users` – Signup.** Only **3 fields**: `name`, `email`, `password`. Creates the user.
 - `PUT /api/users/:id` - Update user by ID
 - `DELETE /api/users/:id` - Delete user by ID
 
 ### Profile / Onboarding (auth: `x-user-id` header)
-- `GET /api/profile` - Get current user's profile
+Profile data is stored **inside the User document** (`user.profile`), so one read gives user + profile.
+- `GET /api/profile` - Get current user's profile only
 - `POST /api/profile` - Create profile (optional: `display_name`, `country`, `age`). Call once after signup.
 - `PUT /api/profile` - Update profile with full onboarding data in one request. Call once on the 9th onboarding screen with all 9 screens' data.
 
-**Flow:** **Signup** (POST /api/users with `name`, `email`, `password`) → POST profile (optional initial fields) → onboarding screens 1–9 (no API calls) → on 9th screen → one PUT /api/profile with full payload.
+**Flow:** **Signup** (POST /api/users) → POST profile (optional) → onboarding → one PUT /api/profile with full payload. To get **complete user + profile in one call**, use **GET /api/users/me** (with `x-user-id`).
 
 ## Example Request
 

@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
+/**
+ * DEPRECATED: Profile data is now stored in User.profile (embedded in User document).
+ * This model is kept for reference and for the one-time migration script
+ * scripts/migrate-profile-to-user.js (copy existing AthleteProfile data into User.profile).
+ */
 const AthleteProfileSchema = new Schema({
   user: { type: Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
   // Screen 1: Basic Info
@@ -41,7 +46,7 @@ const AthleteProfileSchema = new Schema({
 
   // Screen 5: Availability
   availability: {
-    training_days_per_week: { type: Number, min: 2, max: 6 },
+    training_days_per_week: { type: Number, min: 1, max: 6 },
     session_duration: { type: Number, enum: [45, 60, 75, 90] },
     preferred_rest_days: [String] // ['Monday', 'Wednesday', ...]
   },
