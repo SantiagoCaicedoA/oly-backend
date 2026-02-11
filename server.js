@@ -10,9 +10,17 @@ const notFound = require('./middleware/notFound');
 
 // Initialize Express app
 const app = express();
+const path = require('path');
+const fs = require('fs');
 
 // Connect to MongoDB
 connectDB();
+
+// Ensure local uploads dir exists (for post images – local testing)
+const uploadsDir = path.join(process.cwd(), 'uploads', 'images');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
 // Middleware
 app.use(helmet()); // Security headers
@@ -20,6 +28,9 @@ app.use(cors()); // Enable CORS
 app.use(morgan('dev')); // Logging
 app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
+
+// Serve uploaded files (local testing – replace with S3 URLs later)
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Routes
 app.use('/api', routes);

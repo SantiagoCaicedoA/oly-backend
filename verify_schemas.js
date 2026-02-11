@@ -21,10 +21,26 @@ const completeProfile = new AthleteProfile({
 
     // Screen 2
     strength_stats: {
-        snatch: { value: 123, checked: true },
-        power_snatch: { value: 118, checked: true },
-        jerk: { value: 168, checked: true },
-        back_squat: { value: 210, checked: true }
+        classic: {
+            snatch: { value: 123, checked: true },
+            clean_jerk: { value: 0, checked: false }
+        },
+        variation: {
+            power_snatch: { value: 118, checked: true },
+            clean: { value: 0, checked: false },
+            power_clean: { value: 130, checked: true }
+        },
+        squat: {
+            back_squat: { value: 210, checked: true },
+            front_squat: { value: 160, checked: false },
+            overhead_squat: { value: 0, checked: false }
+        },
+        press: {
+            strict_press: { value: 0, checked: false },
+            push_press: { value: 0, checked: false },
+            power_jerk: { value: 0, checked: false },
+            jerk: { value: 168, checked: true }
+        }
     },
     strength_accuracy: 'Tested',
 

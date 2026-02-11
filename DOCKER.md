@@ -27,6 +27,15 @@ Step-by-step instructions to build and run the Oly backend with Docker.
 
 ---
 
+## Important: set MONGODB_URI when running the image
+
+If you **run the image alone** (e.g. Docker Desktop “Run” or `docker run olybackend:latest`), the app will exit with **“MONGODB_URI is not set”** unless you pass the variable.
+
+- **Recommended:** use **docker compose up** so the backend and MongoDB start together and `MONGODB_URI` is set automatically.
+- **Or** when running the image alone, add the env var (e.g. in Docker Desktop run options set `MONGODB_URI=mongodb://host.docker.internal:27017/oly-backend` if MongoDB is on your host, or use your Atlas URI).
+
+---
+
 ## Option A: Build and run the image only (no MongoDB in Docker)
 
 Use this when MongoDB runs elsewhere (e.g. Atlas, or local MongoDB).
@@ -115,6 +124,100 @@ docker compose down
 # Remove MongoDB data as well (optional):
 docker compose down -v
 ```
+
+---
+
+## Test Docker locally (quick checklist)
+
+Use this to confirm your Docker setup works end-to-end on your machine.
+
+### 1. Start the stack
+
+From the project root (`oly-backend`):
+
+```bash
+docker compose up -d --build
+```
+
+Wait a few seconds for MongoDB and the backend to start.
+
+### 2. Check containers are running
+
+```bash
+docker compose ps
+```
+
+You should see `backend` and `mongo` with status “Up”. If the backend keeps restarting, check logs:
+
+```bash
+docker compose logs backend
+```
+
+### 3. Hit the API (from your host)
+
+**Base URL:** `http://localhost:8080` (or the port you mapped, e.g. 8080).
+
+**Health check:**
+
+```bash
+curl http://localhost:8080/api/health
+```
+
+Expected: `{"success":true,"message":"API is running",...}`
+
+**Root (optional):**
+
+```bash
+curl http://localhost:8080/
+```
+
+Expected: `{"success":true,"message":"Welcome to Oly Backend API",...}`
+
+**Signup:**
+
+```bash
+curl -X POST http://localhost:8080/api/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Test User","email":"test@example.com","password":"password123"}'
+```
+
+Expected: `201` with `{"success":true,"data":{"_id":"...","name":"Test User","email":"test@example.com",...}}`. Copy the `_id` from the response.
+
+**Signin:**
+
+```bash
+curl -X POST http://localhost:8080/api/users/signin \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"password123"}'
+```
+
+Expected: `200` with user data. Copy `data._id` if you didn’t from signup.
+
+**Profile (replace `USER_ID` with the `_id` from signup/signin):**
+
+```bash
+curl http://localhost:8080/api/profile \
+  -H "x-user-id: USER_ID"
+```
+
+Expected: `200` with `{"success":true,"data":null,...}` (no profile yet) or profile data.
+
+**Get current user + profile:**
+
+```bash
+curl http://localhost:8080/api/users/me \
+  -H "x-user-id: USER_ID"
+```
+
+Expected: `200` with full user (no password) and `profile`.
+
+### 4. Stop when done
+
+```bash
+docker compose down
+```
+
+If all the curl commands above return the expected responses, your Docker setup is working locally.
 
 ---
 

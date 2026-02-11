@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const profileController = require('../controllers/profileController');
 const auth = require('../middleware/auth');
+const { uploadProfileImageToMemory, uploadVideoToMemory } = require('../config/upload');
 const { body, validationResult } = require('express-validator');
 
 const validate = (req, res, next) => {
@@ -30,6 +31,36 @@ router.use(auth);
 
 // POST – Create profile (call once after signup; optional display_name, country, age)
 router.post('/', createProfileValidation, validate, profileController.createProfile);
+
+// POST – Upload profile image to S3 and save URL to athlete profile (multipart field "image")
+router.post(
+  '/upload-image',
+  (req, res, next) => {
+    uploadProfileImageToMemory(req, res, (err) => {
+      if (err) {
+        const message = err.code === 'LIMIT_FILE_SIZE' ? 'Image must be 5MB or less' : err.message;
+        return res.status(400).json({ success: false, message });
+      }
+      next();
+    });
+  },
+  profileController.uploadProfileImage
+);
+
+// POST – Upload profile video to S3 and save URL to athlete profile (multipart field "video", max 100MB)
+router.post(
+  '/upload-video',
+  (req, res, next) => {
+    uploadVideoToMemory(req, res, (err) => {
+      if (err) {
+        const message = err.code === 'LIMIT_FILE_SIZE' ? 'Video must be 100MB or less' : err.message;
+        return res.status(400).json({ success: false, message });
+      }
+      next();
+    });
+  },
+  profileController.uploadProfileVideo
+);
 
 // GET – Get current user's profile
 router.get('/', profileController.getProfile);

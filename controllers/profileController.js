@@ -1,6 +1,8 @@
 const User = require('../models/User');
 const { deepMerge } = require('../utils/mergeProfile');
 const { normalizeProfilePayload } = require('../utils/normalizeProfileEnums');
+const { profileWithMediaUrls } = require('../utils/profileResponse');
+const { uploadProfileImage, uploadProfileVideo } = require('../services/s3Service');
 
 const INITIAL_PROFILE_FIELDS = ['display_name', 'country', 'age'];
 
@@ -27,7 +29,7 @@ class ProfileController {
 
       res.status(200).json({
         success: true,
-        data: profile,
+        data: profileWithMediaUrls(profile),
       });
     } catch (error) {
       next(error);
@@ -58,8 +60,86 @@ class ProfileController {
 
       res.status(201).json({
         success: true,
-        data: req.user.profile,
+        data: profileWithMediaUrls(req.user.profile),
         message: 'Profile created. Complete onboarding and send all data in one PUT /api/profile.',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/profile/upload-image – Upload image to S3, save URL to athlete profile.
+   * Expects multipart form field "image". Returns URL and updated profile.
+   */
+  async uploadProfileImage(req, res, next) {
+    try {
+      if (!req.file || !req.file.buffer) {
+        return res.status(400).json({
+          success: false,
+          message: 'No image file provided. Send multipart form with field "image".',
+        });
+      }
+
+      const url = await uploadProfileImage(
+        req.file.buffer,
+        req.file.mimetype,
+        String(req.user._id)
+      );
+
+      const current =
+        req.user.profile && typeof req.user.profile.toObject === 'function'
+          ? req.user.profile.toObject()
+          : req.user.profile
+            ? { ...req.user.profile }
+            : {};
+      req.user.profile = { ...current, profile_image_url: url };
+      await req.user.save();
+
+      res.status(200).json({
+        success: true,
+        url,
+        data: profileWithMediaUrls(req.user.profile),
+        message: 'Profile image uploaded and saved.',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/profile/upload-video – Upload profile video to S3, save URL to athlete profile.
+   * Expects multipart form field "video". Returns URL and updated profile (with video_url in data).
+   */
+  async uploadProfileVideo(req, res, next) {
+    try {
+      if (!req.file || !req.file.buffer) {
+        return res.status(400).json({
+          success: false,
+          message: 'No video file provided. Send multipart form with field "video".',
+        });
+      }
+
+      const url = await uploadProfileVideo(
+        req.file.buffer,
+        req.file.mimetype,
+        String(req.user._id)
+      );
+
+      const current =
+        req.user.profile && typeof req.user.profile.toObject === 'function'
+          ? req.user.profile.toObject()
+          : req.user.profile
+            ? { ...req.user.profile }
+            : {};
+      req.user.profile = { ...current, profile_video_url: url };
+      await req.user.save();
+
+      res.status(200).json({
+        success: true,
+        url,
+        data: profileWithMediaUrls(req.user.profile),
+        message: 'Profile video uploaded and saved.',
       });
     } catch (error) {
       next(error);
@@ -88,7 +168,7 @@ class ProfileController {
 
       res.status(200).json({
         success: true,
-        data: req.user.profile,
+        data: profileWithMediaUrls(req.user.profile),
         message: 'Profile updated successfully',
       });
     } catch (error) {

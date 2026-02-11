@@ -1,4 +1,5 @@
 const userService = require('../services/userService');
+const { profileWithMediaUrls } = require('../utils/profileResponse');
 
 class UserController {
   /**
@@ -27,6 +28,9 @@ class UserController {
     try {
       const user = req.user.toObject();
       delete user.password;
+      if (user.profile) {
+        user.profile = profileWithMediaUrls(user.profile);
+      }
       res.status(200).json({
         success: true,
         data: user,

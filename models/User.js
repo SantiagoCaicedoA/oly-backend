@@ -4,6 +4,8 @@ const Schema = mongoose.Schema;
 // Profile data (onboarding) – embedded in User so one document has everything
 const profileSchema = new Schema(
   {
+    profile_image_url: String, // S3 URL for athlete profile photo
+    profile_video_url: String, // S3 URL for athlete profile video
     display_name: String,
     country: String,
     age: Number,
@@ -14,14 +16,26 @@ const profileSchema = new Schema(
     bodyweight_unit: { type: String, enum: ['kg', 'lbs'], default: 'kg' },
     preferred_unit: { type: String, enum: ['Metric', 'Imperial'], default: 'Metric' },
     strength_stats: {
-      snatch: { value: Number, checked: Boolean },
-      power_snatch: { value: Number, checked: Boolean },
-      clean_jerk: { value: Number, checked: Boolean },
-      clean: { value: Number, checked: Boolean },
-      power_clean: { value: Number, checked: Boolean },
-      jerk: { value: Number, checked: Boolean },
-      back_squat: { value: Number, checked: Boolean },
-      front_squat: { value: Number, checked: Boolean },
+      classic: {
+        snatch: { value: Number, checked: Boolean },
+        clean_jerk: { value: Number, checked: Boolean },
+      },
+      variation: {
+        power_snatch: { value: Number, checked: Boolean },
+        clean: { value: Number, checked: Boolean },
+        power_clean: { value: Number, checked: Boolean },
+      },
+      squat: {
+        back_squat: { value: Number, checked: Boolean },
+        front_squat: { value: Number, checked: Boolean },
+        overhead_squat: { value: Number, checked: Boolean },
+      },
+      press: {
+        strict_press: { value: Number, checked: Boolean },
+        push_press: { value: Number, checked: Boolean },
+        power_jerk: { value: Number, checked: Boolean },
+        jerk: { value: Number, checked: Boolean },
+      },
     },
     strength_accuracy: { type: String, enum: ['Tested', 'Estimated', 'Unsure'] },
     considerations: {

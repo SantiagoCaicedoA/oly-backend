@@ -43,13 +43,46 @@ function normalizeTopLevel(obj) {
 
 const impactLevel = { values: ['Mild', 'Moderate', 'High'], key: (v) => (v && String(v).toLowerCase()) };
 
+const STRENGTH_SECTIONS = {
+  classic: ['snatch', 'clean_jerk'],
+  variation: ['power_snatch', 'clean', 'power_clean'],
+  squat: ['back_squat', 'front_squat', 'overhead_squat'],
+  press: ['strict_press', 'push_press', 'power_jerk', 'jerk'],
+};
+
+/**
+ * Convert flat strength_stats (legacy) to sectioned format { classic, variation, squat, press }.
+ * If already sectioned (has 'classic' or 'variation' etc.), return as-is.
+ * Ensures all four sections and all lifts exist with { value, checked }.
+ */
+function strengthStatsToSectioned(strengthStats) {
+  if (!strengthStats || typeof strengthStats !== 'object') return strengthStats;
+  if (strengthStats.classic != null || strengthStats.variation != null) return strengthStats;
+
+  const sectioned = {};
+  for (const [section, liftKeys] of Object.entries(STRENGTH_SECTIONS)) {
+    sectioned[section] = {};
+    for (const key of liftKeys) {
+      const entry = strengthStats[key];
+      sectioned[section][key] = {
+        value: entry?.value != null ? entry.value : 0,
+        checked: Boolean(entry?.checked),
+      };
+    }
+  }
+  return sectioned;
+}
+
 function normalizeProfilePayload(obj) {
   if (!obj || typeof obj !== 'object') return obj;
   normalizeTopLevel(obj);
   if (obj.considerations && typeof obj.considerations === 'object' && obj.considerations.impact_level !== undefined) {
     obj.considerations.impact_level = findMatch(obj.considerations.impact_level, impactLevel);
   }
+  if (obj.strength_stats != null) {
+    obj.strength_stats = strengthStatsToSectioned(obj.strength_stats);
+  }
   return obj;
 }
 
-module.exports = { normalizeProfilePayload };
+module.exports = { normalizeProfilePayload, strengthStatsToSectioned };

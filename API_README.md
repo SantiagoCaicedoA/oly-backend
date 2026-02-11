@@ -138,7 +138,32 @@ Returns the **complete user** (no password) including **profile** in one respons
 
 ---
 
-## 4. Profile – PUT (full onboarding payload)
+## 4. Profile – Upload image (S3) and save URL to athlete profile
+
+Upload a profile image to S3; the API returns the public URL and saves it to the current user's profile as `profile_image_url`.
+
+| Item       | Value |
+|------------|--------|
+| **Method** | `POST` |
+| **Endpoint** | `/api/profile/upload-image` |
+| **Auth**   | Required: `x-user-id: <userId>` |
+| **Content-Type** | `multipart/form-data` |
+
+- Field name: **`image`** (file). Allowed: JPEG, PNG, GIF, WebP; max 5MB.
+
+```bash
+curl -X POST http://localhost:8080/api/profile/upload-image \
+  -H "x-user-id: YOUR_USER_ID" \
+  -F "image=@/path/to/photo.jpg"
+```
+
+**Success (200):** `{ "success": true, "url": "https://...", "data": { "profile_image_url": "https://...", ... }, "message": "Profile image uploaded and saved." }`
+
+The URL is stored as `profile_image_url` and returned by **GET /api/profile** and **GET /api/users/me**. Ensure your S3 bucket allows public read for objects (bucket policy or ACL).
+
+---
+
+## 5. Profile – PUT (full onboarding payload)
 
 Updates the current user’s profile. Call **once** when the user completes the 9th onboarding screen and send **all 9 screens’ data** in one request. Existing profile is merged with the payload (nested objects are deep-merged).
 
@@ -179,18 +204,30 @@ All fields are optional; send only what you collect. Structure matches the 9 onb
 | `strength_stats`    | object | See structure below |
 | `strength_accuracy` | string | `"Tested"` \| `"Estimated"` \| `"Unsure"` |
 
-`strength_stats` – each lift can have `value` (number) and `checked` (boolean):
+`strength_stats` – grouped by section (CLASSIC, VARIATION, SQUAT, PRESS). Each lift has `value` (number) and `checked` (boolean):
 
 ```json
 {
-  "snatch": { "value": 120, "checked": true },
-  "power_snatch": { "value": 115, "checked": true },
-  "clean_jerk": { "value": 150, "checked": true },
-  "clean": { "value": 140, "checked": true },
-  "power_clean": { "value": 130, "checked": true },
-  "jerk": { "value": 100, "checked": false },
-  "back_squat": { "value": 180, "checked": true },
-  "front_squat": { "value": 160, "checked": true }
+  "classic": {
+    "snatch": { "value": 120, "checked": true },
+    "clean_jerk": { "value": 150, "checked": true }
+  },
+  "variation": {
+    "power_snatch": { "value": 115, "checked": true },
+    "clean": { "value": 140, "checked": true },
+    "power_clean": { "value": 130, "checked": true }
+  },
+  "squat": {
+    "back_squat": { "value": 180, "checked": true },
+    "front_squat": { "value": 160, "checked": true },
+    "overhead_squat": { "value": 0, "checked": false }
+  },
+  "press": {
+    "strict_press": { "value": 0, "checked": false },
+    "push_press": { "value": 0, "checked": false },
+    "power_jerk": { "value": 0, "checked": false },
+    "jerk": { "value": 100, "checked": true }
+  }
 }
 ```
 
@@ -274,14 +311,26 @@ All fields are optional; send only what you collect. Structure matches the 9 onb
   "bodyweight_unit": "kg",
   "preferred_unit": "Metric",
   "strength_stats": {
-    "snatch": { "value": 120, "checked": true },
-    "power_snatch": { "value": 115, "checked": true },
-    "clean_jerk": { "value": 150, "checked": true },
-    "clean": { "value": 140, "checked": true },
-    "power_clean": { "value": 130, "checked": true },
-    "jerk": { "value": 100, "checked": false },
-    "back_squat": { "value": 180, "checked": true },
-    "front_squat": { "value": 160, "checked": true }
+    "classic": {
+      "snatch": { "value": 120, "checked": true },
+      "clean_jerk": { "value": 150, "checked": true }
+    },
+    "variation": {
+      "power_snatch": { "value": 115, "checked": true },
+      "clean": { "value": 140, "checked": true },
+      "power_clean": { "value": 130, "checked": true }
+    },
+    "squat": {
+      "back_squat": { "value": 180, "checked": true },
+      "front_squat": { "value": 160, "checked": true },
+      "overhead_squat": { "value": 0, "checked": false }
+    },
+    "press": {
+      "strict_press": { "value": 0, "checked": false },
+      "push_press": { "value": 0, "checked": false },
+      "power_jerk": { "value": 0, "checked": false },
+      "jerk": { "value": 100, "checked": true }
+    }
   },
   "strength_accuracy": "Tested",
   "considerations": {
@@ -351,6 +400,135 @@ curl -X PUT http://localhost:8080/api/profile \
 
 ---
 
+## 6. Posts – Create / List / Get / Update / Delete
+
+Create a new post (draft or published). **Video is required** (upload or URL); other details (opinion, load, etc.) go in the form body. Image is optional. All post routes require `x-user-id`.
+
+| Item       | Value |
+|------------|--------|
+| **Method** | `POST` |
+| **Endpoint** | `/api/posts` |
+| **Auth**   | `x-user-id` |
+| **Content-Type** | `multipart/form-data` (video file + body fields) |
+
+### Create post – request
+
+- **Video (required):** Either upload a file in field **`video`** (MP4, MOV, WebM, AVI; max 100MB; stored on S3) or send **`video_url`** in the body.
+- **Image (optional):** Field **`image`** — JPEG/PNG/GIF/WebP, max 5MB. If omitted, `image_url` is stored as empty string.
+- **Other details (optional):** Send as form body fields.
+
+| Field         | Type    | Required | Description |
+|---------------|---------|----------|-------------|
+| `video`       | file    | One of video / video_url | Video file (multipart); MP4/MOV/WebM/AVI, max 100MB |
+| `video_url`   | string  | One of video / video_url | URL to the video (e.g. S3) when not uploading a file |
+| `image`       | file    | No       | Image file (multipart); JPEG/PNG/GIF/WebP, max 5MB |
+| `image_url`   | string  | No       | URL to image (if not uploading); default empty |
+| `opinion`     | string  | No       | User's notes/comment (max 2000 chars) |
+| `load_lifted` | number  | No       | Load lifted (e.g. 123 for 123 kg) |
+| `load_unit`   | string  | No       | `"kg"` or `"lbs"` (default `"kg"`) |
+| `context`     | string  | No       | Session context (max 500 chars) |
+| `intent`      | string  | No       | Intent text (max 500 chars) |
+| `effort`      | string  | No       | Effort text (max 500 chars) |
+| `rpe`         | number  | No       | Rate of perceived exertion (0–10) |
+| `visibility`  | array   | No       | `["PRIVATE"]` or `["SHARED_WITH_FRIENDS"]` (default `["PRIVATE"]`) |
+| `status`      | string  | No       | `"DRAFT"` or `"PUBLISHED"` (default `"DRAFT"`) |
+
+### Example create post (multipart – video + body details)
+
+```bash
+curl -X POST http://localhost:8080/api/posts \
+  -H "x-user-id: YOUR_USER_ID" \
+  -F "video=@/path/to/lift.mp4" \
+  -F "opinion=Clean felt solid today, working on lockout" \
+  -F "load_lifted=120" \
+  -F "load_unit=kg" \
+  -F "context=Heavy singles" \
+  -F "intent=Build to heavy single" \
+  -F "effort=RPE 8" \
+  -F "rpe=8" \
+  -F "visibility=[\"SHARED_WITH_FRIENDS\"]" \
+  -F "status=PUBLISHED"
+```
+
+### Sample payload (form-data fields; video as file)
+
+| Field        | Value |
+|-------------|--------|
+| `video`     | (file) **required** |
+| `opinion`   | `Clean felt solid today` |
+| `load_lifted` | `120` |
+| `load_unit` | `kg` |
+| `context`   | `Heavy singles, third session` |
+| `intent`    | `Build to a heavy single` |
+| `effort`    | `RPE 8` |
+| `rpe`       | `8` |
+| `visibility` | `["SHARED_WITH_FRIENDS"]` |
+| `status`    | `PUBLISHED` |
+
+### Create post – success (201)
+
+```json
+{
+  "success": true,
+  "data": {
+    "_id": "...",
+    "user": "...",
+    "image_url": "",
+    "video_url": "https://s3.../...",
+    "opinion": "Clean felt solid today",
+    "load_lifted": 120,
+    "load_unit": "kg",
+    "context": "Heavy singles",
+    "intent": "Build to a heavy single",
+    "effort": "RPE 8",
+    "rpe": 8,
+    "visibility": ["SHARED_WITH_FRIENDS"],
+    "status": "PUBLISHED",
+    "createdAt": "...",
+    "updatedAt": "..."
+  },
+  "message": "Post created successfully"
+}
+```
+
+### Other post endpoints
+
+| Action        | Method | Endpoint       | Auth       |
+|---------------|--------|----------------|------------|
+| List my posts | GET    | `/api/posts`   | `x-user-id` |
+| Get post by ID| GET    | `/api/posts/:id` | `x-user-id` |
+| Update post   | PUT    | `/api/posts/:id` | `x-user-id` |
+| Delete post   | DELETE | `/api/posts/:id` | `x-user-id` |
+
+List supports query params: `status` (DRAFT/PUBLISHED), `limit`, `skip`.
+
+---
+
+## 7. Video – Upload file to S3
+
+Upload a video file to S3; returns the public URL. Use this URL in **POST /api/videos** with metadata (lift_name, category, reps, weight_value, etc.) to create the video record.
+
+| Item       | Value |
+|------------|--------|
+| **Method** | `POST` |
+| **Endpoint** | `/api/videos/upload` |
+| **Auth**   | Required: `x-user-id` |
+| **Content-Type** | `multipart/form-data` |
+
+- Field name: **`video`** (file). Allowed: MP4, MOV, WebM, AVI; max **100MB**.
+
+```bash
+curl -X POST http://localhost:8080/api/videos/upload \
+  -H "x-user-id: YOUR_USER_ID" \
+  -F "video=@/path/to/lift.mp4"
+```
+
+**Success (200):** `{ "success": true, "url": "https://oly-image.s3.eu-north-1.amazonaws.com/videos/USER_ID/...", "message": "Video uploaded successfully. Use this URL in POST /api/videos with metadata." }`
+
+Then create the video record: **POST /api/videos** with JSON body `{ "video_url": "<returned url>", "lift_name": "...", "category": "Classic", "reps": 3, "weight_value": 100, ... }`.
+
+---
+
 ## Quick reference
 
 | Action              | Method | Endpoint              | Auth       |
@@ -359,3 +537,7 @@ curl -X PUT http://localhost:8080/api/profile \
 | Signin              | POST   | `/api/users/signin`    | None       |
 | **Get current user + profile** | GET    | `/api/users/me`        | `x-user-id` |
 | Update profile      | PUT    | `/api/profile`         | `x-user-id` |
+| Upload profile image| POST   | `/api/profile/upload-image` | `x-user-id` |
+| Create post         | POST   | `/api/posts`           | `x-user-id` |
+| List my posts       | GET    | `/api/posts`           | `x-user-id` |
+| **Upload video (S3)** | POST   | `/api/videos/upload`   | `x-user-id` |

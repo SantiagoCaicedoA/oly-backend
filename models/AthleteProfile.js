@@ -25,14 +25,26 @@ const AthleteProfileSchema = new Schema({
 
   // Screen 2 & 3: Current Strength
   strength_stats: {
-    snatch: { value: Number, checked: Boolean },
-    power_snatch: { value: Number, checked: Boolean },
-    clean_jerk: { value: Number, checked: Boolean },
-    clean: { value: Number, checked: Boolean },
-    power_clean: { value: Number, checked: Boolean },
-    jerk: { value: Number, checked: Boolean },
-    back_squat: { value: Number, checked: Boolean },
-    front_squat: { value: Number, checked: Boolean }
+    classic: {
+      snatch: { value: Number, checked: Boolean },
+      clean_jerk: { value: Number, checked: Boolean },
+    },
+    variation: {
+      power_snatch: { value: Number, checked: Boolean },
+      clean: { value: Number, checked: Boolean },
+      power_clean: { value: Number, checked: Boolean },
+    },
+    squat: {
+      back_squat: { value: Number, checked: Boolean },
+      front_squat: { value: Number, checked: Boolean },
+      overhead_squat: { value: Number, checked: Boolean },
+    },
+    press: {
+      strict_press: { value: Number, checked: Boolean },
+      push_press: { value: Number, checked: Boolean },
+      power_jerk: { value: Number, checked: Boolean },
+      jerk: { value: Number, checked: Boolean },
+    },
   },
   strength_accuracy: { type: String, enum: ['Tested', 'Estimated', 'Unsure'] },
 

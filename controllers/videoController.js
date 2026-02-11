@@ -1,8 +1,37 @@
 const Video = require('../models/Video');
+const { uploadVideo } = require('../services/s3Service');
 
 class VideoController {
     /**
-     * Upload a new video
+     * POST /api/videos/upload – Upload video file to S3, return URL (no Video record created).
+     */
+    async uploadVideoFile(req, res, next) {
+        try {
+            if (!req.file || !req.file.buffer) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'No video file provided. Send multipart form with field "video".',
+                });
+            }
+
+            const url = await uploadVideo(
+                req.file.buffer,
+                req.file.mimetype,
+                String(req.user._id)
+            );
+
+            res.status(200).json({
+                success: true,
+                url,
+                message: 'Video uploaded successfully. Use this URL in POST /api/videos with metadata.',
+            });
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
+     * Upload a new video (create Video record – expects video_url in body or from prior upload).
      */
     async uploadVideo(req, res, next) {
         try {
