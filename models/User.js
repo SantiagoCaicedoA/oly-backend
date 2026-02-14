@@ -5,7 +5,8 @@ const Schema = mongoose.Schema;
 const profileSchema = new Schema(
   {
     profile_image_url: String, // S3 URL for athlete profile photo
-    profile_video_url: String, // S3 URL for athlete profile video
+    profile_video_url: String, // S3 URL for latest profile video (kept for backward compat)
+    profile_video_urls: [String], // All profile video URLs (multiple uploads)
     display_name: String,
     country: String,
     age: Number,
@@ -59,13 +60,19 @@ const profileSchema = new Schema(
   { _id: false }
 );
 
-// Signup: name, email, password. Profile (onboarding) stored in same document.
+// Signup: name, email, password, username. Profile (onboarding) stored in same document.
 const userSchema = new Schema(
   {
     name: {
       type: String,
       required: [true, 'Please add a name'],
       trim: true,
+    },
+    username: {
+      type: String,
+      trim: true,
+      unique: true,
+      sparse: true, // allow null/empty without unique conflict
     },
     email: {
       type: String,

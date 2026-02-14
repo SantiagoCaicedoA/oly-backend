@@ -208,14 +208,14 @@ class PostController {
   }
 
   /**
-   * Get all posts for current user with optional filtering
+   * Get all posts from all users (feed). Optional filtering by status.
    * Query params: status, limit, skip
    */
   async getPosts(req, res, next) {
     try {
       const { status, limit = 50, skip = 0 } = req.query;
 
-      const filter = { user: req.user._id };
+      const filter = {};
       if (status) {
         filter.status = status;
       }
@@ -223,7 +223,8 @@ class PostController {
       const posts = await Post.find(filter)
         .sort({ createdAt: -1 })
         .limit(parseInt(limit))
-        .skip(parseInt(skip));
+        .skip(parseInt(skip))
+        .populate('user', 'name');
 
       const total = await Post.countDocuments(filter);
 

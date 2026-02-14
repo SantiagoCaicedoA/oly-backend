@@ -11,6 +11,13 @@ function hasProfileData(profile) {
   return Object.keys(profile).length > 0;
 }
 
+/** Username from User only (never from profile.display_name or name). Keeps username and display_name separate. */
+function getUsername(user) {
+  if (!user || user.username == null) return '';
+  const u = String(user.username).trim();
+  return u;
+}
+
 class ProfileController {
   /**
    * GET /api/profile – Get current user's profile (from same User document)
@@ -22,14 +29,14 @@ class ProfileController {
       if (!hasProfileData(profile)) {
         return res.status(200).json({
           success: true,
-          data: null,
+          data: { username: getUsername(req.user) },
           message: 'No profile found. Create profile with POST /api/profile first.',
         });
       }
 
       res.status(200).json({
         success: true,
-        data: profileWithMediaUrls(profile),
+        data: { username: getUsername(req.user), ...profileWithMediaUrls(profile) },
       });
     } catch (error) {
       next(error);
@@ -60,7 +67,7 @@ class ProfileController {
 
       res.status(201).json({
         success: true,
-        data: profileWithMediaUrls(req.user.profile),
+        data: { username: getUsername(req.user), ...profileWithMediaUrls(req.user.profile) },
         message: 'Profile created. Complete onboarding and send all data in one PUT /api/profile.',
       });
     } catch (error) {
@@ -99,7 +106,7 @@ class ProfileController {
       res.status(200).json({
         success: true,
         url,
-        data: profileWithMediaUrls(req.user.profile),
+        data: { username: getUsername(req.user), ...profileWithMediaUrls(req.user.profile) },
         message: 'Profile image uploaded and saved.',
       });
     } catch (error) {
@@ -120,11 +127,21 @@ class ProfileController {
         });
       }
 
-      const url = await uploadProfileVideo(
-        req.file.buffer,
-        req.file.mimetype,
-        String(req.user._id)
-      );
+      let url;
+      try {
+        url = await uploadProfileVideo(
+          req.file.buffer,
+          req.file.mimetype,
+          String(req.user._id)
+        );
+      } catch (s3Err) {
+        const msg = s3Err.message || 'Video upload failed';
+        const isNetwork = /network|ECONNRESET|ETIMEDOUT|fetch failed/i.test(msg);
+        return res.status(isNetwork ? 503 : 400).json({
+          success: false,
+          message: isNetwork ? 'Video upload failed (network/connection). Check internet and try again.' : msg,
+        });
+      }
 
       const current =
         req.user.profile && typeof req.user.profile.toObject === 'function'
@@ -132,13 +149,23 @@ class ProfileController {
           : req.user.profile
             ? { ...req.user.profile }
             : {};
-      req.user.profile = { ...current, profile_video_url: url };
+      const existingUrls = Array.isArray(current.profile_video_urls) ? [...current.profile_video_urls] : [];
+      if (current.profile_video_url && !existingUrls.includes(current.profile_video_url)) {
+        existingUrls.push(current.profile_video_url);
+      }
+      existingUrls.push(url);
+      req.user.profile = {
+        ...current,
+        profile_video_url: url,
+        profile_video_urls: existingUrls,
+      };
       await req.user.save();
 
-      res.status(200).json({
+      return res.status(200).json({
         success: true,
         url,
-        data: profileWithMediaUrls(req.user.profile),
+        video_urls: existingUrls,
+        data: { username: getUsername(req.user), ...profileWithMediaUrls(req.user.profile) },
         message: 'Profile video uploaded and saved.',
       });
     } catch (error) {
@@ -168,7 +195,7 @@ class ProfileController {
 
       res.status(200).json({
         success: true,
-        data: profileWithMediaUrls(req.user.profile),
+        data: { username: getUsername(req.user), ...profileWithMediaUrls(req.user.profile) },
         message: 'Profile updated successfully',
       });
     } catch (error) {

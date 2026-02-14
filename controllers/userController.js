@@ -28,6 +28,7 @@ class UserController {
     try {
       const user = req.user.toObject();
       delete user.password;
+      user.username = (user.username != null && String(user.username).trim() !== '') ? String(user.username).trim() : (user.name || '');
       if (user.profile) {
         user.profile = profileWithMediaUrls(user.profile);
       }
@@ -65,6 +66,7 @@ class UserController {
   async signin(req, res, next) {
     try {
       const user = await userService.signin(req.body.email, req.body.password);
+      user.username = (user.username != null && String(user.username).trim() !== '') ? String(user.username).trim() : (user.name || '');
       res.status(200).json({
         success: true,
         data: user,
@@ -83,6 +85,7 @@ class UserController {
   async createUser(req, res, next) {
     try {
       const user = await userService.createUser(req.body);
+      user.username = (user.username != null && String(user.username).trim() !== '') ? String(user.username).trim() : (user.name || '');
       res.status(201).json({
         success: true,
         data: user,

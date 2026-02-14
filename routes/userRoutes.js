@@ -19,17 +19,19 @@ const validate = (req, res, next) => {
   next();
 };
 
-// Signup: only name, email, password
+// Signup: name, email, password; username optional (distinct from display_name)
 const createUserValidation = [
   body('name').trim().notEmpty().withMessage('Name is required'),
   body('email').isEmail().withMessage('Please provide a valid email'),
   body('password')
     .isLength({ min: 6 })
     .withMessage('Password must be at least 6 characters long'),
+  body('username').optional().trim().isLength({ min: 1, max: 50 }).withMessage('Username must be 1–50 characters'),
 ];
 
 const updateUserValidation = [
   body('name').optional().trim().notEmpty().withMessage('Name cannot be empty'),
+  body('username').optional().trim().isLength({ max: 50 }).withMessage('Username max 50 characters'),
   body('email').optional().isEmail().withMessage('Please provide a valid email'),
   body('password')
     .optional()

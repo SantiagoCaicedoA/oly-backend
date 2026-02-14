@@ -31,8 +31,10 @@ class UserService {
    */
   async createUser(userData) {
     try {
-      const { name, email, password } = userData;
-      const user = new User({ name, email, password });
+      const { name, email, password, username } = userData;
+      const doc = { name, email, password };
+      if (username != null && String(username).trim() !== '') doc.username = String(username).trim();
+      const user = new User(doc);
       await user.save();
       const userObject = user.toObject();
       delete userObject.password;
@@ -75,6 +77,7 @@ class UserService {
     try {
       const allowed = {};
       if (updateData.name !== undefined) allowed.name = updateData.name;
+      if (updateData.username !== undefined) allowed.username = updateData.username !== '' ? updateData.username : null;
       if (updateData.email !== undefined) allowed.email = updateData.email;
       if (updateData.password !== undefined) allowed.password = updateData.password;
 
