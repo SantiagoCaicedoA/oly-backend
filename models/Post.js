@@ -4,6 +4,8 @@ const Schema = mongoose.Schema;
 const PostSchema = new Schema(
   {
     user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    name: { type: String, default: '' },
+    username: { type: String, default: '' },
 
     // Media (video required; image optional)
     image_url: { type: String, default: '' },
@@ -21,7 +23,6 @@ const PostSchema = new Schema(
     context: { type: String, default: '' },
     intent: { type: String, default: '' },
     effort: { type: String, default: '' },
-    rpe: { type: Number, min: 0, max: 10, default: null },
 
     // Visibility: PRIVATE = "Just me", SHARED_WITH_FRIENDS = "Public"
     visibility: {

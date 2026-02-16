@@ -25,9 +25,9 @@ async function migrate() {
       { $set: { profile: profileData } }
     );
     count++;
-    console.log('Migrated profile for user', userId);
+
   }
-  console.log('Done. Migrated', count, 'profiles.');
+
   await mongoose.disconnect();
 }
 

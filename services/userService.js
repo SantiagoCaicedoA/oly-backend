@@ -36,9 +36,7 @@ class UserService {
       if (username != null && String(username).trim() !== '') doc.username = String(username).trim();
       const user = new User(doc);
       await user.save();
-      const userObject = user.toObject();
-      delete userObject.password;
-      return userObject;
+      return user;
     } catch (error) {
       if (error.code === 11000) {
         throw new AppError(409, 'Email already exists');
@@ -59,12 +57,10 @@ class UserService {
    */
   async signin(email, password) {
     const user = await User.findOne({ email: email?.toLowerCase?.() || email });
-    if (!user || user.password !== password) {
+    if (!user || !(await user.matchPassword(password))) {
       throw new AppError(401, 'Invalid email or password');
     }
-    const userObject = user.toObject();
-    delete userObject.password;
-    return userObject;
+    return user;
   }
 
   /**

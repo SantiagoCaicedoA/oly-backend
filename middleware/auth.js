@@ -1,34 +1,49 @@
 // Simple auth middleware - reads userId from headers
 // TODO: Replace with proper JWT authentication later
+const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
 const auth = async (req, res, next) => {
-    try {
-        const userId = req.headers['x-user-id'];
+    let token;
 
-        if (!userId) {
-            return res.status(401).json({
-                success: false,
-                message: 'Authentication required. Please provide x-user-id header.'
-            });
+    if (
+        req.headers.authorization &&
+        req.headers.authorization.startsWith('Bearer')
+    ) {
+        // Set token from Bearer token in header (handle any whitespace/newlines within or after Bearer)
+        const parts = req.headers.authorization.split(/\s+/);
+        if (parts.length > 1) {
+            token = parts.slice(1).join('');
         }
+    }
 
-        // Verify user exists
-        const user = await User.findById(userId);
+    // Make sure token exists
+    if (!token) {
+        return res.status(401).json({
+            success: false,
+            message: 'Not authorized to access this route',
+        });
+    }
+
+    try {
+        // Verify token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+        const user = await User.findById(decoded.id);
         if (!user) {
             return res.status(401).json({
                 success: false,
-                message: 'User not found'
+                message: 'No user found with this id',
             });
         }
 
-        // Attach user to request
         req.user = user;
         next();
-    } catch (error) {
-        res.status(401).json({
+    } catch (err) {
+        console.error('Auth Middleware Error:', err);
+        return res.status(401).json({
             success: false,
-            message: 'Invalid authentication'
+            message: 'Not authorized to access this route',
         });
     }
 };

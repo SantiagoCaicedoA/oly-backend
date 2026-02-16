@@ -25,7 +25,6 @@ const VideoSchema = new Schema({
     set_label: String, // "top_set", etc.
 
     // Subjective Metrics
-    rpe: Number,
     effort_meter: Number,
     bar_speed_label: String, // "fast", etc.
     coach_insight: String,

@@ -27,4 +27,28 @@ function profileWithMediaUrls(profile) {
   };
 }
 
-module.exports = { profileWithMediaUrls };
+/**
+ * Formats a user object for API response, including formatted profile fields.
+ * Ensures consistent username selection and removes sensitive data.
+ * @param {Object} user - Mongoose user document or plain object.
+ * @returns {Object|null}
+ */
+function formatUserResponse(user) {
+  if (!user) return null;
+  const userObj = typeof user.toObject === 'function' ? user.toObject() : { ...user };
+
+  delete userObj.password;
+
+  // Consistent username logic: fallback to name if username is missing/empty
+  userObj.username = (userObj.username != null && String(userObj.username).trim() !== '')
+    ? String(userObj.username).trim()
+    : (userObj.name || '');
+
+  if (userObj.profile) {
+    userObj.profile = profileWithMediaUrls(userObj.profile);
+  }
+
+  return userObj;
+}
+
+module.exports = { profileWithMediaUrls, formatUserResponse };

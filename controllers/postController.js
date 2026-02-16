@@ -69,7 +69,7 @@ function mergeJsonPayload(body) {
 
 /**
  * Normalize frontend payload to DB shape.
- * Frontend sends: is_private, is_public, lift_name, opinion, session_detail { context, effort_value, intent_opt, isEffort, isIntent, lifted_kg, rpe }.
+ * Frontend sends: is_private, is_public, lift_name, opinion, session_detail { context, effort_value, intent_opt, isEffort, isIntent, lifted_kg }.
  * Form-data: all values may be strings; session_detail may be JSON string.
  */
 function normalizePostBody(body) {
@@ -94,7 +94,6 @@ function normalizePostBody(body) {
     out.session_detail = sessionDetail;
     out.load_lifted = sessionDetail.lifted_kg != null ? Number(sessionDetail.lifted_kg) : null;
     out.load_unit = 'kg';
-    out.rpe = sessionDetail.rpe != null && sessionDetail.rpe !== '' ? parseFloat(sessionDetail.rpe) : null;
     out.intent = sessionDetail.intent_opt != null ? String(sessionDetail.intent_opt) : '';
     out.effort = sessionDetail.effort_value != null ? String(sessionDetail.effort_value) : '';
     out.context = sessionDetail.context != null ? String(sessionDetail.context) : '';
@@ -119,6 +118,8 @@ function postToFrontendFormat(post) {
   return {
     _id: p._id,
     user: p.user,
+    name: p.name || '',
+    username: p.username || '',
     video_url: p.video_url || '',
     is_private: !isPublic,
     is_public: isPublic,
@@ -177,6 +178,8 @@ class PostController {
 
       const post = new Post({
         user: req.user._id,
+        name: body.name ?? '',
+        username: body.username ?? '',
         image_url: body.image_url ?? '',
         video_url: body.video_url ?? '',
         lift_name: body.lift_name ?? '',
@@ -187,7 +190,6 @@ class PostController {
         context: body.context ?? '',
         intent: body.intent ?? '',
         effort: body.effort ?? '',
-        rpe: body.rpe != null ? body.rpe : null,
         visibility: Array.isArray(body.visibility) ? body.visibility : ['PRIVATE'],
         status: body.status === 'PUBLISHED' ? 'PUBLISHED' : 'DRAFT',
       });

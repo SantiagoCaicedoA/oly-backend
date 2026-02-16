@@ -1,7 +1,7 @@
 const User = require('../models/User');
 const { deepMerge } = require('../utils/mergeProfile');
 const { normalizeProfilePayload } = require('../utils/normalizeProfileEnums');
-const { profileWithMediaUrls } = require('../utils/profileResponse');
+const { formatUserResponse } = require('../utils/profileResponse');
 const { uploadProfileImage, uploadProfileVideo } = require('../services/s3Service');
 
 const INITIAL_PROFILE_FIELDS = ['display_name', 'country', 'age'];
@@ -11,12 +11,6 @@ function hasProfileData(profile) {
   return Object.keys(profile).length > 0;
 }
 
-/** Username from User only (never from profile.display_name or name). Keeps username and display_name separate. */
-function getUsername(user) {
-  if (!user || user.username == null) return '';
-  const u = String(user.username).trim();
-  return u;
-}
 
 class ProfileController {
   /**
@@ -29,14 +23,14 @@ class ProfileController {
       if (!hasProfileData(profile)) {
         return res.status(200).json({
           success: true,
-          data: { username: getUsername(req.user) },
+          data: formatUserResponse(req.user),
           message: 'No profile found. Create profile with POST /api/profile first.',
         });
       }
 
       res.status(200).json({
         success: true,
-        data: { username: getUsername(req.user), ...profileWithMediaUrls(profile) },
+        data: formatUserResponse(req.user),
       });
     } catch (error) {
       next(error);
@@ -67,7 +61,7 @@ class ProfileController {
 
       res.status(201).json({
         success: true,
-        data: { username: getUsername(req.user), ...profileWithMediaUrls(req.user.profile) },
+        data: formatUserResponse(req.user),
         message: 'Profile created. Complete onboarding and send all data in one PUT /api/profile.',
       });
     } catch (error) {
@@ -106,7 +100,7 @@ class ProfileController {
       res.status(200).json({
         success: true,
         url,
-        data: { username: getUsername(req.user), ...profileWithMediaUrls(req.user.profile) },
+        data: formatUserResponse(req.user),
         message: 'Profile image uploaded and saved.',
       });
     } catch (error) {
@@ -165,7 +159,7 @@ class ProfileController {
         success: true,
         url,
         video_urls: existingUrls,
-        data: { username: getUsername(req.user), ...profileWithMediaUrls(req.user.profile) },
+        data: formatUserResponse(req.user),
         message: 'Profile video uploaded and saved.',
       });
     } catch (error) {
@@ -195,7 +189,7 @@ class ProfileController {
 
       res.status(200).json({
         success: true,
-        data: { username: getUsername(req.user), ...profileWithMediaUrls(req.user.profile) },
+        data: formatUserResponse(req.user),
         message: 'Profile updated successfully',
       });
     } catch (error) {

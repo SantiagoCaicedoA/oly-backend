@@ -92,7 +92,6 @@ const createPostValidation = [
   body('context').optional().trim().isLength({ max: 500 }),
   body('intent').optional().trim().isLength({ max: 500 }),
   body('effort').optional().trim().isLength({ max: 500 }),
-  body('rpe').optional().isFloat({ min: 0, max: 10 }).toFloat(),
   body('visibility').optional().isArray().withMessage('visibility must be an array'),
   body('visibility.*').optional().isIn(['PRIVATE', 'SHARED_WITH_FRIENDS']),
   body('status').optional().isIn(['DRAFT', 'PUBLISHED']),

@@ -2,10 +2,6 @@ const mongoose = require('mongoose');
 const AthleteProfile = require('./models/AthleteProfile');
 const Video = require('./models/Video');
 
-console.log('Verifying updated schemas...');
-
-// Test Complete AthleteProfile (all 9 screens)
-console.log('Testing Updated AthleteProfile...');
 const completeProfile = new AthleteProfile({
     user: new mongoose.Types.ObjectId(),
 
@@ -76,7 +72,7 @@ if (profileError) {
     console.error('❌ Complete AthleteProfile failed validation:', profileError);
     process.exit(1);
 } else {
-    console.log('✅ Complete AthleteProfile (all 9 screens) passed validation');
+    console.log('Complete AthleteProfile (all 9 screens) passed validation');
 }
 
 // Test Invalid Training Preference
@@ -86,14 +82,12 @@ const invalidProfile = new AthleteProfile({
 });
 const invalidError = invalidProfile.validateSync();
 if (invalidError && invalidError.errors['training_preference']) {
-    console.log('✅ Invalid training_preference detected correctly');
+    console.log('Invalid training_preference detected correctly');
 } else {
     console.error('❌ Should have failed on invalid training_preference');
     process.exit(1);
 }
 
-// Test Video still works
-console.log('Testing Video model...');
 const validVideo = new Video({
     user: new mongoose.Types.ObjectId(),
     lift_name: 'Snatch',
@@ -108,8 +102,7 @@ if (videoError) {
     console.error('❌ Valid Video failed validation:', videoError);
     process.exit(1);
 } else {
-    console.log('✅ Video model still works correctly');
+    console.log('Video model still works correctly');
 }
 
-console.log('🎉 All schema verifications passed!');
 process.exit(0);

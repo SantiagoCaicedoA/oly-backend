@@ -1,5 +1,5 @@
 const userService = require('../services/userService');
-const { profileWithMediaUrls } = require('../utils/profileResponse');
+const { formatUserResponse } = require('../utils/profileResponse');
 
 class UserController {
   /**
@@ -14,7 +14,7 @@ class UserController {
       res.status(200).json({
         success: true,
         count: users.length,
-        data: users,
+        data: users.map((u) => formatUserResponse(u)),
       });
     } catch (error) {
       next(error);
@@ -26,15 +26,9 @@ class UserController {
    */
   async getMe(req, res, next) {
     try {
-      const user = req.user.toObject();
-      delete user.password;
-      user.username = (user.username != null && String(user.username).trim() !== '') ? String(user.username).trim() : (user.name || '');
-      if (user.profile) {
-        user.profile = profileWithMediaUrls(user.profile);
-      }
       res.status(200).json({
         success: true,
-        data: user,
+        data: formatUserResponse(req.user),
       });
     } catch (error) {
       next(error);
@@ -53,7 +47,7 @@ class UserController {
       const user = await userService.getUserById(id);
       res.status(200).json({
         success: true,
-        data: user,
+        data: formatUserResponse(user),
       });
     } catch (error) {
       next(error);
@@ -66,10 +60,13 @@ class UserController {
   async signin(req, res, next) {
     try {
       const user = await userService.signin(req.body.email, req.body.password);
-      user.username = (user.username != null && String(user.username).trim() !== '') ? String(user.username).trim() : (user.name || '');
+      const token = user.getSignedJwtToken();
+      const refreshToken = user.getSignedRefreshToken();
       res.status(200).json({
         success: true,
-        data: user,
+        token,
+        refresh_token: refreshToken,
+        data: formatUserResponse(user),
       });
     } catch (error) {
       next(error);
@@ -85,10 +82,13 @@ class UserController {
   async createUser(req, res, next) {
     try {
       const user = await userService.createUser(req.body);
-      user.username = (user.username != null && String(user.username).trim() !== '') ? String(user.username).trim() : (user.name || '');
+      const token = user.getSignedJwtToken();
+      const refreshToken = user.getSignedRefreshToken();
       res.status(201).json({
         success: true,
-        data: user,
+        token,
+        refresh_token: refreshToken,
+        data: formatUserResponse(user),
       });
     } catch (error) {
       next(error);
@@ -107,8 +107,58 @@ class UserController {
       const user = await userService.updateUser(id, req.body);
       res.status(200).json({
         success: true,
-        data: user,
+        data: formatUserResponse(user),
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Refresh token: takes a valid refresh_token (from body or header) and returns a new access token
+   */
+  async refreshToken(req, res, next) {
+    try {
+      let refreshToken = req.body.refresh_token || req.headers['x-refresh-token'];
+
+      // Also check Authorization header if desired (as fallback)
+      if (!refreshToken && req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        refreshToken = req.headers.authorization.split(' ')[1];
+      }
+
+      if (!refreshToken) {
+        return res.status(400).json({
+          success: false,
+          message: 'Refresh token is required',
+        });
+      }
+
+      try {
+        const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+        const user = await User.findById(decoded.id);
+
+        if (!user) {
+          return res.status(401).json({
+            success: false,
+            message: 'Invalid refresh token',
+          });
+        }
+
+        const token = user.getSignedJwtToken();
+        const newRefreshToken = user.getSignedRefreshToken();
+
+        res.status(200).json({
+          success: true,
+          token,
+          refresh_token: newRefreshToken,
+        });
+      } catch (err) {
+        console.error('Refresh Token Error:', err);
+        return res.status(401).json({
+          success: false,
+          message: 'Refresh token expired or invalid',
+        });
+      }
     } catch (error) {
       next(error);
     }
