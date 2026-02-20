@@ -1,3 +1,4 @@
+const WeeklyTraining = require('../models/WeeklyTraining');
 const { generateTrainingResponse } = require('../services/openaiService');
 const { normalizeWorkoutTabData } = require('../utils/workoutTabSchema');
 
@@ -65,4 +66,37 @@ async function generate(req, res, next) {
   }
 }
 
-module.exports = { generate };
+/**
+ * GET /api/training/week – Current user's stored week (monday..sunday with training or rest).
+ * Returns the latest week for the user (avoids date/timezone exact-match issues).
+ */
+async function getWeek(req, res, next) {
+  try {
+    const userId = req.user._id;
+    const doc = await WeeklyTraining.findOne({ user: userId })
+      .sort({ week_start: -1 })
+      .lean();
+
+    if (!doc) {
+      return res.status(200).json({
+        success: true,
+        data: null,
+        message: 'No training week yet. Complete onboarding to generate your first week, or it may still be generating.',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        week_start: doc.week_start,
+        days: doc.days,
+        is_first_week: doc.is_first_week,
+        profile_snapshot: doc.profile_snapshot,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { generate, getWeek };

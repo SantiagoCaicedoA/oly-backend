@@ -4,10 +4,19 @@
  */
 
 /**
+ * @typedef {Object} SetDetail
+ * @property {number} set_number
+ * @property {number} [weight]
+ * @property {number} [reps]
+ * @property {number} [rpm_percent]
+ */
+
+/**
  * @typedef {Object} TrainingDayItem
  * @property {string} exercise_name
- * @property {string} time - e.g. "15 min"
+ * @property {string} time
  * @property {number} no_of_set
+ * @property {SetDetail[]} sets - per-set weight, reps, rpm_percent
  */
 
 /**
@@ -60,12 +69,37 @@ const DEFAULT_WORKOUT_TAB_DATA = {
  * @param {object} data - Parsed AI response
  * @returns {WorkoutTabData}
  */
-function normalizeExercise(t) {
+function normalizeSet(s, index) {
+  if (!s || typeof s !== 'object') return null;
+  const setNum = typeof s.set_number === 'number' ? s.set_number : (index + 1);
+  const weightRaw = typeof s.weight === 'number' ? s.weight : (typeof s.weight_lifted === 'number' ? s.weight_lifted : null);
+  const weight = weightRaw != null && weightRaw > 0 ? weightRaw : null;
   return {
-    exercise_name: typeof t.exercise_name === 'string' ? t.exercise_name : '',
-    time: typeof t.time === 'string' ? t.time : '',
-    no_of_set: typeof t.no_of_set === 'number' ? t.no_of_set : 0,
+    set_number: setNum,
+    weight,
+    reps: typeof s.reps === 'number' ? s.reps : null,
+    rpm_percent: typeof s.rpm_percent === 'number' ? s.rpm_percent : null,
   };
+}
+
+function normalizeExercise(t) {
+  const rawSets = Array.isArray(t.sets) ? t.sets : [];
+  const sets = rawSets.map((s, i) => normalizeSet(s, i)).filter(Boolean);
+  const noOfSet = typeof t.no_of_set === 'number' ? t.no_of_set : sets.length || 0;
+  const hasName = typeof t.exercise_name === 'string' && String(t.exercise_name).trim() !== '';
+  return {
+    exercise_name: hasName ? String(t.exercise_name).trim() : '',
+    time: typeof t.time === 'string' ? t.time : '',
+    no_of_set: noOfSet,
+    sets: sets.length ? sets : (noOfSet > 0 ? Array.from({ length: noOfSet }, (_, i) => normalizeSet({ set_number: i + 1 }, i)) : []),
+    reps: typeof t.reps === 'number' ? t.reps : null,
+    weight_lifted: typeof t.weight_lifted === 'number' && t.weight_lifted > 0 ? t.weight_lifted : null,
+    rpm_percent: typeof t.rpm_percent === 'number' ? t.rpm_percent : null,
+  };
+}
+
+function isExerciseObject(e) {
+  return e && typeof e === 'object' && (typeof e.exercise_name === 'string' && e.exercise_name.trim() !== '' || Array.isArray(e.sets) && e.sets.length > 0);
 }
 
 function normalizeTrainingDays(trainingDays) {
@@ -73,7 +107,7 @@ function normalizeTrainingDays(trainingDays) {
   return trainingDays.map((d) => ({
     day: typeof d.day === 'number' ? d.day : 0,
     day_label: typeof d.day_label === 'string' ? d.day_label : '',
-    exercises: Array.isArray(d.exercises) ? d.exercises.map(normalizeExercise) : [],
+    exercises: Array.isArray(d.exercises) ? d.exercises.filter(isExerciseObject).map(normalizeExercise) : [],
   }));
 }
 

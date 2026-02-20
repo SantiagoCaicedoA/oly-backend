@@ -52,6 +52,15 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+
+  if (process.env.OPENAI_API_KEY) {
+    const cron = require('node-cron');
+    const { runSundayCron } = require('./jobs/sundayTrainingCron');
+    cron.schedule('0 0 * * 0', () => {
+      runSundayCron().then((r) => console.log('Sunday cron done', r)).catch((e) => console.error('Sunday cron error', e));
+    });
+    console.log('Sunday training cron scheduled (0 0 * * 0)');
+  }
 });
 
 module.exports = app;

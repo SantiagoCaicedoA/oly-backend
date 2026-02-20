@@ -247,7 +247,8 @@ class PostController {
   async getPostById(req, res, next) {
     try {
       const { id } = req.params;
-
+      console.log("id", id);
+      console.log("request . user id", req.user._id);
       const post = await Post.findOne({
         _id: id,
         user: req.user._id,

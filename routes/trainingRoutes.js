@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
-const { generate } = require('../controllers/trainingController');
+const { generate, getWeek } = require('../controllers/trainingController');
 
-// Training logic: document + athlete profile → generate blocks / interpret feedback
+// Stored week (from onboarding trigger or Sunday cron) – frontend uses this, no manual generate
+router.get('/week', auth, getWeek);
+// Optional: manual generate still available for admin/special cases
 router.post('/generate', auth, generate);
 
 module.exports = router;

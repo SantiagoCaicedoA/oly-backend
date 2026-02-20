@@ -1,8 +1,10 @@
 const User = require('../models/User');
+const WeeklyTraining = require('../models/WeeklyTraining');
 const { deepMerge } = require('../utils/mergeProfile');
 const { normalizeProfilePayload } = require('../utils/normalizeProfileEnums');
 const { formatUserResponse } = require('../utils/profileResponse');
 const { uploadProfileImage, uploadProfileVideo } = require('../services/s3Service');
+const { generateFirstWeek, canGenerateWeek } = require('../services/generateTrainingWeek');
 
 const INITIAL_PROFILE_FIELDS = ['display_name', 'country', 'age'];
 
@@ -187,10 +189,29 @@ class ProfileController {
       req.user.profile = merged;
       await req.user.save();
 
+      let message = 'Profile updated successfully';
+      if (body.availability && (body.availability.training_days_per_week != null || (body.availability.preferred_rest_days && body.availability.preferred_rest_days.length))) {
+        const n = merged.availability?.training_days_per_week;
+        if (typeof n === 'number') message = `Profile updated. Your next training week will have ${n} session${n !== 1 ? 's' : ''}.`;
+      }
+
+      if (canGenerateWeek(req.user.profile)) {
+        const existing = await WeeklyTraining.findOne({ user: req.user._id });
+        if (!existing) {
+          try {
+            await generateFirstWeek(req.user);
+            message = 'Profile updated and training plan generated successfully.';
+          } catch (err) {
+            console.error('Generate first week failed', err);
+            message = 'Profile updated, but there was an issue generating your training plan. We will retry shortly.';
+          }
+        }
+      }
+
       res.status(200).json({
         success: true,
         data: formatUserResponse(req.user),
-        message: 'Profile updated successfully',
+        message,
       });
     } catch (error) {
       next(error);

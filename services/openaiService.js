@@ -7,21 +7,36 @@
 
 const { getContextForPrompt } = require('./documentService');
 
-/** JSON schema for workout-tab response. training_days = FULL week (length = athlete's training_days_per_week). */
+/** JSON schema: each exercise has a "sets" array; each set has set_number, weight, reps, rpm_percent. */
 const WORKOUT_TAB_JSON_SCHEMA = `{
-  "coach_note": "string - general coach note",
-  "key_cues": ["string - KEY CUES bullet list"],
+  "coach_note": "string",
+  "key_cues": ["string"],
   "training_days": [
     {
       "day": 1,
-      "day_label": "string e.g. Day 1 or Monday",
+      "day_label": "string e.g. Monday",
       "exercises": [
-        { "exercise_name": "string", "time": "string e.g. 15 min", "no_of_set": number }
+        {
+          "exercise_name": "string",
+          "time": "string e.g. 15 min",
+          "no_of_set": number,
+          "sets": [
+            { "set_number": 1, "weight": number, "reps": number, "rpm_percent": number or null },
+            { "set_number": 2, "weight": number, "reps": number, "rpm_percent": number or null }
+          ]
+        }
       ]
     }
   ],
   "todays_training": [
-    { "exercise_name": "string", "time": "string", "no_of_set": number }
+    {
+      "exercise_name": "string",
+      "time": "string",
+      "no_of_set": number,
+      "sets": [
+        { "set_number": 1, "weight": number, "reps": number, "rpm_percent": number or null }
+      ]
+    }
   ],
   "sleep_quality": number 1-10 or null,
   "stress_level": number 1-10 or null,
@@ -31,7 +46,7 @@ const WORKOUT_TAB_JSON_SCHEMA = `{
   "weight_lifted": number or null,
   "reps": number or null,
   "suggested_exercises": [
-    { "lift_name": "string", "description": "string", "label": "string e.g. EXERCISE FIT" }
+    { "lift_name": "string", "description": "string", "label": "string" }
   ]
 }`;
 
@@ -119,15 +134,19 @@ async function generateTrainingResponse({ profile, request, feedback, documentCo
 CRITICAL: Generate the FULL week according to what the athlete chose in onboarding (their profile).
 - Use "Training days/week" (training_days_per_week) from the athlete profile — that is the number of days THEY selected in onboarding. Return exactly that many items in "training_days" (could be 1, 2, 3, 4, 5, or 6 — whatever they chose).
 - Use "Session duration" and "Preferred rest days" from the same profile. Respect session_duration per session and preferred_rest_days when assigning day labels.
-- Each item in training_days: { "day": 1, "day_label": "Day 1" or "Monday", "exercises": [ { "exercise_name", "time", "no_of_set" }, ... ] }.
-- todays_training: use the first day's exercises (same as training_days[0].exercises) for "today" view.
+- Each item in training_days: { "day", "day_label", "exercises": [ ... ] }. Each exercise has ONLY: exercise_name, time, no_of_set, sets. Do NOT put coach_prescription or key_cues_of_specific_lift inside an exercise — those go at day level only.
+- CRITICAL — WEIGHT: For every set, "weight" MUST be a positive number. Use the athlete's Strength stats: match the exercise to a lift (e.g. Snatch → classic.snatch value, Snatch Pull → use snatch 1RM × 0.9, Back Squat → squat.back_squat). Formula: weight = Math.round(1RM × percentage). Use 70%, 75%, 80%, 85% etc. for sets 1,2,3,4. Preferred unit is in profile (kg or lbs). NEVER output 0 for weight; if a lift 1RM is missing use 50 kg (or 110 lbs) as fallback.
+- CRITICAL — RPM_PERCENT: For every set, "rpm_percent" MUST be a number (e.g. 70, 75, 80, 85). This is intensity as % of 1RM. Never null for working sets.
+- Each set: set_number (1,2,3...), weight (positive number), reps (positive number), rpm_percent (number). no_of_set = sets.length.
+- todays_training: same structure as training_days[0].exercises.
 
 You must respond with ONLY a valid JSON object, no markdown and no text before or after. Use this exact shape:
 
 ${WORKOUT_TAB_JSON_SCHEMA}
 
-- training_days: array length MUST equal the athlete's chosen "Training days/week" from their profile (onboarding). Each element has day (1-based), day_label, and exercises array.
-- coach_note, key_cues, sleep_quality, stress_level, mental_readiness, coach_prescription, key_cues_of_specific_lift, weight_lifted, reps, suggested_exercises: as before.
+- training_days: length = athlete's "Training days/week". Each exercise: only exercise_name, time, no_of_set, sets[]. Each set: set_number, weight (positive, from Strength stats), reps, rpm_percent (number, never null).
+- coach_note, key_cues, coach_prescription, key_cues_of_specific_lift go at the day/root level only, never inside an exercise object.
+- sleep_quality, stress_level, mental_readiness, suggested_exercises: as before.
 
 ## Oly App Training Logic Documentation (excerpts)
 ${docContext || '(No document loaded.)'}
