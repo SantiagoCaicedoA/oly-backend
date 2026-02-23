@@ -66,6 +66,8 @@ function mapResponseToDays(workoutData, profile) {
       weight: w != null && w > 0 ? w : null,
       reps: typeof s.reps === 'number' ? s.reps : null,
       rpm_percent: typeof s.rpm_percent === 'number' ? s.rpm_percent : null,
+      coach_prescription: typeof s.coach_prescription === 'string' ? s.coach_prescription : '',
+      key_cues: Array.isArray(s.key_cues) ? s.key_cues.filter(c => typeof c === 'string') : [],
     };
   }
 
@@ -95,13 +97,18 @@ function mapResponseToDays(workoutData, profile) {
       type: 'training',
       coach_note: coachNote,
       key_cues: keyCues,
-      exercises: validExercises.map((e) => {
+      daily_check_in: {
+        sleep_quality: workoutData.daily_check_in?.sleep_quality ?? 5,
+        stress_level: workoutData.daily_check_in?.stress_level ?? 5,
+        mental_readiness: workoutData.daily_check_in?.mental_readiness ?? 5,
+      }, exercises: validExercises.map((e) => {
         const rawSets = Array.isArray(e.sets) ? e.sets : [];
         const sets = rawSets.map((s, i) => mapSet(s, i));
         return {
           exercise_name: e.exercise_name || '',
           time: e.time || '',
           no_of_set: typeof e.no_of_set === 'number' ? e.no_of_set : sets.length,
+          coach_note: e.coach_note || '',
           sets,
           reps: typeof e.reps === 'number' ? e.reps : null,
           weight_lifted: typeof e.weight_lifted === 'number' && e.weight_lifted > 0 ? e.weight_lifted : null,

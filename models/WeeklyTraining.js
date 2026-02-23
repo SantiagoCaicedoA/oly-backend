@@ -9,6 +9,16 @@ const setDetailSchema = new Schema(
     weight: Number,
     reps: Number,
     rpm_percent: Number,
+    coach_prescription: String,
+    key_cues: [String],
+    bar_speed: String,
+    position_quality: String,
+    was_it_a_miss: { type: Boolean, default: false },
+    where_did_it_fail: String,
+    missed_where: String,
+    any_pain_or_discomfort: { type: Boolean, default: false },
+    pain_level: String,
+    pain_where: [String],
   },
   { _id: false }
 );
@@ -19,9 +29,16 @@ const exerciseItemSchema = new Schema(
     time: String,
     no_of_set: Number,
     sets: [setDetailSchema],
-    reps: Number,
-    weight_lifted: Number,
-    rpm_percent: Number,
+    coach_note: String,
+  },
+  { _id: false }
+);
+
+const dailyCheckInSchema = new Schema(
+  {
+    sleep_quality: { type: Number, default: 5 },
+    stress_level: { type: Number, default: 5 },
+    mental_readiness: { type: Number, default: 5 },
   },
   { _id: false }
 );
@@ -31,6 +48,10 @@ const trainingDayContentSchema = new Schema(
     type: { type: String, enum: ['training', 'rest'], required: true },
     coach_note: String,
     key_cues: [String],
+    daily_check_in: {
+      type: dailyCheckInSchema,
+      default: () => ({ sleep_quality: null, stress_level: null, mental_readiness: null })
+    },
     exercises: [exerciseItemSchema],
     coach_prescription: String,
     key_cues_of_specific_lift: [String],

@@ -9,6 +9,8 @@
  * @property {number} [weight]
  * @property {number} [reps]
  * @property {number} [rpm_percent]
+ * @property {string} [coach_prescription]
+ * @property {string[]} [key_cues]
  */
 
 /**
@@ -16,6 +18,7 @@
  * @property {string} exercise_name
  * @property {string} time
  * @property {number} no_of_set
+ * @property {string} [coach_note]
  * @property {SetDetail[]} sets - per-set weight, reps, rpm_percent
  */
 
@@ -34,14 +37,19 @@
  */
 
 /**
+ * @typedef {Object} DailyCheckIn
+ * @property {number} [sleep_quality] - 1-10
+ * @property {number} [stress_level] - 1-10
+ * @property {number} [mental_readiness] - 1-10
+ */
+
+/**
  * @typedef {Object} WorkoutTabData
  * @property {string} coach_note
  * @property {string[]} key_cues
  * @property {TrainingDay[]} training_days - Full week; length = athlete's training_days_per_week
  * @property {TrainingDayItem[]} todays_training - First day's exercises (for "today" view)
- * @property {number} [sleep_quality] - 1-10
- * @property {number} [stress_level] - 1-10
- * @property {number} [mental_readiness] - 1-10
+ * @property {DailyCheckIn} daily_check_in
  * @property {string} coach_prescription
  * @property {string[]} key_cues_of_specific_lift
  * @property {number} [weight_lifted]
@@ -54,9 +62,11 @@ const DEFAULT_WORKOUT_TAB_DATA = {
   key_cues: [],
   training_days: [],
   todays_training: [],
-  sleep_quality: null,
-  stress_level: null,
-  mental_readiness: null,
+  daily_check_in: {
+    sleep_quality: null,
+    stress_level: null,
+    mental_readiness: null,
+  },
   coach_prescription: '',
   key_cues_of_specific_lift: [],
   weight_lifted: null,
@@ -79,6 +89,8 @@ function normalizeSet(s, index) {
     weight,
     reps: typeof s.reps === 'number' ? s.reps : null,
     rpm_percent: typeof s.rpm_percent === 'number' ? s.rpm_percent : null,
+    coach_prescription: typeof s.coach_prescription === 'string' ? s.coach_prescription : '',
+    key_cues: Array.isArray(s.key_cues) ? s.key_cues.filter((c) => typeof c === 'string') : [],
   };
 }
 
@@ -91,6 +103,7 @@ function normalizeExercise(t) {
     exercise_name: hasName ? String(t.exercise_name).trim() : '',
     time: typeof t.time === 'string' ? t.time : '',
     no_of_set: noOfSet,
+    coach_note: typeof t.coach_note === 'string' ? t.coach_note : '',
     sets: sets.length ? sets : (noOfSet > 0 ? Array.from({ length: noOfSet }, (_, i) => normalizeSet({ set_number: i + 1 }, i)) : []),
     reps: typeof t.reps === 'number' ? t.reps : null,
     weight_lifted: typeof t.weight_lifted === 'number' && t.weight_lifted > 0 ? t.weight_lifted : null,
@@ -123,9 +136,11 @@ function normalizeWorkoutTabData(data) {
     key_cues: Array.isArray(data.key_cues) ? data.key_cues.filter((c) => typeof c === 'string') : [],
     training_days,
     todays_training: todays_training.length > 0 ? todays_training : todaysFromDays,
-    sleep_quality: typeof data.sleep_quality === 'number' ? data.sleep_quality : null,
-    stress_level: typeof data.stress_level === 'number' ? data.stress_level : null,
-    mental_readiness: typeof data.mental_readiness === 'number' ? data.mental_readiness : null,
+    daily_check_in: {
+      sleep_quality: typeof data.daily_check_in?.sleep_quality === 'number' ? data.daily_check_in.sleep_quality : 5,
+      stress_level: typeof data.daily_check_in?.stress_level === 'number' ? data.daily_check_in.stress_level : 5,
+      mental_readiness: typeof data.daily_check_in?.mental_readiness === 'number' ? data.daily_check_in.mental_readiness : 5,
+    },
     coach_prescription: typeof data.coach_prescription === 'string' ? data.coach_prescription : '',
     key_cues_of_specific_lift: Array.isArray(data.key_cues_of_specific_lift)
       ? data.key_cues_of_specific_lift.filter((c) => typeof c === 'string')
@@ -134,10 +149,10 @@ function normalizeWorkoutTabData(data) {
     reps: typeof data.reps === 'number' ? data.reps : null,
     suggested_exercises: Array.isArray(data.suggested_exercises)
       ? data.suggested_exercises.map((e) => ({
-          lift_name: typeof e.lift_name === 'string' ? e.lift_name : '',
-          description: typeof e.description === 'string' ? e.description : '',
-          label: typeof e.label === 'string' ? e.label : '',
-        }))
+        lift_name: typeof e.lift_name === 'string' ? e.lift_name : '',
+        description: typeof e.description === 'string' ? e.description : '',
+        label: typeof e.label === 'string' ? e.label : '',
+      }))
       : [],
   };
 }

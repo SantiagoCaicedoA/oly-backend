@@ -248,11 +248,9 @@ class PostController {
     try {
       const { id } = req.params;
       console.log("id", id);
-      console.log("request . user id", req.user._id);
-      const post = await Post.findOne({
-        _id: id,
-        user: req.user._id,
-      });
+      const post = await Post.findById(id).populate('user', 'name');
+
+      console.log("post", post);
 
       if (!post) {
         return res.status(404).json({

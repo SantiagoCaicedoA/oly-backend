@@ -16,15 +16,16 @@ const WORKOUT_TAB_JSON_SCHEMA = `{
       "day": 1,
       "day_label": "string e.g. Monday",
       "exercises": [
-        {
-          "exercise_name": "string",
-          "time": "string e.g. 15 min",
-          "no_of_set": number,
-          "sets": [
-            { "set_number": 1, "weight": number, "reps": number, "rpm_percent": number or null },
-            { "set_number": 2, "weight": number, "reps": number, "rpm_percent": number or null }
-          ]
-        }
+          {
+            "exercise_name": "string",
+            "time": "string e.g. 15 min",
+            "no_of_set": number,
+            "coach_note": "string",
+            "sets": [
+              { "set_number": 1, "weight": number, "reps": number, "rpm_percent": number or null, "coach_prescription": "string", "key_cues": ["string"] },
+              { "set_number": 2, "weight": number, "reps": number, "rpm_percent": number or null, "coach_prescription": "string", "key_cues": ["string"] }
+            ]
+          }
       ]
     }
   ],
@@ -33,14 +34,17 @@ const WORKOUT_TAB_JSON_SCHEMA = `{
       "exercise_name": "string",
       "time": "string",
       "no_of_set": number,
+      "coach_note": "string",
       "sets": [
-        { "set_number": 1, "weight": number, "reps": number, "rpm_percent": number or null }
+        { "set_number": 1, "weight": number, "reps": number, "rpm_percent": number or null, "coach_prescription": "string", "key_cues": ["string"] }
       ]
     }
   ],
-  "sleep_quality": number 1-10 or null,
-  "stress_level": number 1-10 or null,
-  "mental_readiness": number 1-10 or null,
+  "daily_check_in": {
+    "sleep_quality": number 1-10 or null,
+    "stress_level": number 1-10 or null,
+    "mental_readiness": number 1-10 or null
+  },
   "coach_prescription": "string",
   "key_cues_of_specific_lift": ["string"],
   "weight_lifted": number or null,
@@ -137,16 +141,17 @@ CRITICAL: Generate the FULL week according to what the athlete chose in onboardi
 - Each item in training_days: { "day", "day_label", "exercises": [ ... ] }. Each exercise has ONLY: exercise_name, time, no_of_set, sets. Do NOT put coach_prescription or key_cues_of_specific_lift inside an exercise — those go at day level only.
 - CRITICAL — WEIGHT: For every set, "weight" MUST be a positive number. Use the athlete's Strength stats: match the exercise to a lift (e.g. Snatch → classic.snatch value, Snatch Pull → use snatch 1RM × 0.9, Back Squat → squat.back_squat). Formula: weight = Math.round(1RM × percentage). Use 70%, 75%, 80%, 85% etc. for sets 1,2,3,4. Preferred unit is in profile (kg or lbs). NEVER output 0 for weight; if a lift 1RM is missing use 50 kg (or 110 lbs) as fallback.
 - CRITICAL — RPM_PERCENT: For every set, "rpm_percent" MUST be a number (e.g. 70, 75, 80, 85). This is intensity as % of 1RM. Never null for working sets.
-- Each set: set_number (1,2,3...), weight (positive number), reps (positive number), rpm_percent (number). no_of_set = sets.length.
+- Each set: set_number (1,2,3...), weight (positive number), reps (positive number), rpm_percent (number), coach_prescription (specific guidance for THIS set), key_cues (array of specific cues for THIS set). no_of_set = sets.length. Ensure key_cues are different for each set if applicable.
 - todays_training: same structure as training_days[0].exercises.
 
 You must respond with ONLY a valid JSON object, no markdown and no text before or after. Use this exact shape:
 
 ${WORKOUT_TAB_JSON_SCHEMA}
 
-- training_days: length = athlete's "Training days/week". Each exercise: only exercise_name, time, no_of_set, sets[]. Each set: set_number, weight (positive, from Strength stats), reps, rpm_percent (number, never null).
-- coach_note, key_cues, coach_prescription, key_cues_of_specific_lift go at the day/root level only, never inside an exercise object.
-- sleep_quality, stress_level, mental_readiness, suggested_exercises: as before.
+- training_days: length = athlete's "Training days/week". Each exercise: exercise_name, time, no_of_set, coach_note (for the full exercise), sets[]. Each set: set_number, weight (positive, from Strength stats), reps, rpm_percent (number, never null), coach_prescription (string), key_cues (array of strings).
+- coach_note, key_cues, coach_prescription, key_cues_of_specific_lift go at the day/root level as well (for general notes), but set-level and exercise-level notes are preferred for specific guidance.
+- daily_check_in: contains sleep_quality, stress_level, and mental_readiness as numbers 1-10 (provide realistic values, not null).
+- suggested_exercises: as before.
 
 ## Oly App Training Logic Documentation (excerpts)
 ${docContext || '(No document loaded.)'}
@@ -189,15 +194,24 @@ Respond only with training logic outputs (blocks, sessions, feedback-based adjus
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userContent },
     ],
-    max_tokens: isWorkoutTab ? 4096 : 2048,
+    max_tokens: isWorkoutTab ? 10000 : 2048,
     temperature: 0.4,
   });
 
   const choice = response.choices?.[0];
   let content = choice?.message?.content?.trim() || 'No response generated.';
-  // Strip markdown code block if model wrapped JSON in ```json ... ```
-  if (isWorkoutTab && content.startsWith('```')) {
-    content = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+
+  if (isWorkoutTab) {
+    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (jsonMatch) {
+      content = jsonMatch[1].trim();
+    } else {
+      const startIdx = content.indexOf('{');
+      const endIdx = content.lastIndexOf('}');
+      if (startIdx !== -1 && endIdx !== -1) {
+        content = content.slice(startIdx, endIdx + 1).trim();
+      }
+    }
   }
   const usage = response.usage ? { prompt_tokens: response.usage.prompt_tokens, completion_tokens: response.usage.completion_tokens } : undefined;
 
