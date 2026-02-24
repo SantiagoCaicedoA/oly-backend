@@ -7,6 +7,15 @@
 
 const { getContextForPrompt } = require('./documentService');
 
+// Initialize OpenAI at module level
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+let openai = null;
+
+if (OPENAI_API_KEY) {
+  const OpenAI = require('openai');
+  openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+}
+
 /** JSON schema: each exercise has a "sets" array; each set has set_number, weight, reps, rpm_percent. */
 const WORKOUT_TAB_JSON_SCHEMA = `{
   "coach_note": "string",
@@ -54,7 +63,6 @@ const WORKOUT_TAB_JSON_SCHEMA = `{
   ]
 }`;
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const DEFAULT_MODEL = process.env.OPENAI_TRAINING_MODEL || 'gpt-4o-mini';
 
 /**
@@ -119,9 +127,6 @@ async function generateTrainingResponse({ profile, request, feedback, documentCo
   if (!OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY is not set. Add it to your .env file.');
   }
-
-  const OpenAI = require('openai');
-  const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
   const queryForContext = [request, feedback].filter(Boolean).join(' ');
   const docContext =
@@ -218,7 +223,120 @@ Respond only with training logic outputs (blocks, sessions, feedback-based adjus
   return { content, usage };
 }
 
+/**
+ * Generate AI adjustment for a specific day based on abnormal check-in data
+ */
+async function generateDailyAdjustment(day, checkIn, abnormalities, currentDayData) {
+  if (!OPENAI_API_KEY || !openai) {
+    throw new Error('OpenAI is not properly configured. Check OPENAI_API_KEY.');
+  }
+
+  // Use minimal context for daily adjustments to avoid rate limits
+  const prompt = `
+You are an expert Olympic weightlifting coach. Adjust training based on athlete's daily check-in data.
+
+DAILY CHECK-IN ABNORMALITIES DETECTED:
+- Day: ${day}
+- Sleep Quality: ${checkIn.sleep_quality}/10
+- Stress Level: ${checkIn.stress_level}/10  
+- Mental Readiness: ${checkIn.mental_readiness}/10
+- Abnormalities: ${abnormalities.join(', ')}
+
+CURRENT WORKOUT FOR THIS DAY:
+${JSON.stringify(currentDayData, null, 2)}
+
+TASK: Adjust ONLY this specific day's workout based on abnormal check-in data.
+
+RULES:
+- If sleep quality ≤ 3: Reduce volume by 20-30%, lower intensity, focus on recovery
+- If stress level ≥ 8: Reduce technical complexity, focus on familiar movements
+- If mental readiness ≤ 3: Reduce load, focus on confidence-building exercises
+- If consecutive bad sleep: Consider deload or active recovery
+- If high stress + low recovery: Significant reduction in intensity/volume
+
+RESPONSE FORMAT (JSON):
+{
+  "exercises": [
+    {
+      "exercise_name": "string",
+      "time": "string", 
+      "no_of_set": number,
+      "coach_note": "string",
+      "sets": [
+        {
+          "set_number": 1,
+          "weight": number,
+          "reps": number,
+          "rpm_percent": number,
+          "coach_prescription": "string",
+          "key_cues": ["string"]
+        }
+      ]
+    }
+  ],
+  "coach_note": "string explaining the adjustment",
+  "key_cues": ["string"]
+}
+
+Focus on safety and recovery. Be conservative with adjustments. Return only valid JSON.
+`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert Olympic weightlifting coach. Adjust training based on athlete's daily check-in data. Prioritize safety and recovery. Return only valid JSON."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 1200,
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error('No response from OpenAI');
+    }
+
+    // Log the full AI response for debugging
+    console.log('AI Response length:', content.length);
+    console.log('AI Response preview:', content.substring(0, 500));
+
+    // Parse JSON response with better error handling
+    let adjustment;
+    try {
+      // Try to parse as-is first
+      adjustment = JSON.parse(content);
+    } catch (parseError) {
+      // If that fails, try to extract JSON from content
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          adjustment = JSON.parse(jsonMatch[0]);
+        } catch (secondError) {
+          console.log('Full AI response that failed to parse:', content);
+          throw new Error(`Invalid JSON response from OpenAI: ${content.substring(0, 200)}...`);
+        }
+      } else {
+        console.log('No JSON found in AI response:', content);
+        throw new Error(`No valid JSON found in OpenAI response: ${content.substring(0, 200)}...`);
+      }
+    }
+
+    return adjustment;
+  } catch (error) {
+    console.error('Error generating daily adjustment:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   formatProfileForPrompt,
   generateTrainingResponse,
+  generateDailyAdjustment,
 };

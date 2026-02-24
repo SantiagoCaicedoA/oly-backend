@@ -5,6 +5,7 @@ const profileRoutes = require('./profileRoutes');
 const videoRoutes = require('./videoRoutes');
 const postRoutes = require('./postRoutes');
 const trainingRoutes = require('./trainingRoutes');
+const dailyCheckInRoutes = require('./dailyCheckInRoutes');
 const v1AuthRoutes = require('./v1AuthRoutes');
 
 // API Routes
@@ -13,6 +14,7 @@ router.use('/profile', profileRoutes);
 router.use('/videos', videoRoutes);
 router.use('/posts', postRoutes);
 router.use('/training', trainingRoutes);
+router.use('/daily', dailyCheckInRoutes);
 router.use('/v1/auth', v1AuthRoutes);
 
 // Health check route

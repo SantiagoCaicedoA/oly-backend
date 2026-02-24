@@ -195,7 +195,7 @@ async function logActivity(req, res, next) {
 
         return {
           exercise_name: existingEx.exercise_name,
-          time: incomingExercise.time || existingEx.time,
+          time: existingEx.time, // Preserve existing time, don't update from payload
           no_of_set: incomingExercise.no_of_set || existingEx.no_of_set,
           coach_note: existingEx.coach_note, // Preserve existing coach_note
           sets: [...updatedSets, ...newSets],

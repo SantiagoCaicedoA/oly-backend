@@ -39,6 +39,10 @@ const dailyCheckInSchema = new Schema(
     sleep_quality: { type: Number, default: 5 },
     stress_level: { type: Number, default: 5 },
     mental_readiness: { type: Number, default: 5 },
+    motivation: { type: String, default: 'Neutral' },
+    muscle_soreness: { type: Number, default: 0 },
+    sore_areas: [String],
+    intensity: { type: Number, default: 0 },
   },
   { _id: false }
 );
