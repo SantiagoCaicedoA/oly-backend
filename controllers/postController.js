@@ -1,6 +1,8 @@
 const path = require('path');
 const fs = require('fs');
 const Post = require('../models/Post');
+const Like = require('../models/Like');
+const Comment = require('../models/Comment');
 const { uploadPostVideo } = require('../services/s3Service');
 
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'images');
@@ -97,6 +99,7 @@ function normalizePostBody(body) {
     out.intent = sessionDetail.intent_opt != null ? String(sessionDetail.intent_opt) : '';
     out.effort = sessionDetail.effort_value != null ? String(sessionDetail.effort_value) : '';
     out.context = sessionDetail.context != null ? String(sessionDetail.context) : '';
+    out.context_value = sessionDetail.context_value != null ? String(sessionDetail.context_value) : '';
   }
 
   // lift_name, opinion: trim strings
@@ -125,6 +128,7 @@ function postToFrontendFormat(post) {
     is_public: isPublic,
     lift_name: p.lift_name || '',
     opinion: p.opinion || '',
+    context_value: p.context_value || '',
     session_detail: p.session_detail || null,
     status: p.status || 'DRAFT',
     createdAt: p.createdAt,
@@ -188,6 +192,7 @@ class PostController {
         load_lifted: body.load_lifted != null ? body.load_lifted : null,
         load_unit: body.load_unit || 'kg',
         context: body.context ?? '',
+        context_value: body.context_value ?? '',
         intent: body.intent ?? '',
         effort: body.effort ?? '',
         visibility: Array.isArray(body.visibility) ? body.visibility : ['PRIVATE'],
@@ -211,30 +216,77 @@ class PostController {
 
   /**
    * Get all posts from all users (feed). Optional filtering by status.
-   * Query params: status, limit, skip
+   * Query params: status, page, limit
    */
   async getPosts(req, res, next) {
     try {
-      const { status, limit = 50, skip = 0 } = req.query;
+      const { status, page = 1, limit = 10 } = req.query;
 
       const filter = {};
       if (status) {
         filter.status = status;
       }
 
+      // Only return posts that are shared with friends (not private)
+      filter.visibility = { $in: ['SHARED_WITH_FRIENDS'] };
+
+      const pageNum = Math.max(1, parseInt(page) || 1);
+      const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 10));
+      const skip = (pageNum - 1) * limitNum;
+
       const posts = await Post.find(filter)
         .sort({ createdAt: -1 })
-        .limit(parseInt(limit))
-        .skip(parseInt(skip))
-        .populate('user', 'name');
+        .limit(limitNum)
+        .skip(skip)
+        .populate('user', 'name profile_image_url');
+
+      // Get like counts and comment counts for all posts efficiently
+      const postIds = posts.map(p => p._id);
+      const [likeCounts, commentCounts] = await Promise.all([
+        Like.aggregate([
+          { $match: { post: { $in: postIds } } },
+          { $group: { _id: '$post', count: { $sum: 1 } } }
+        ]),
+        Comment.aggregate([
+          { $match: { post: { $in: postIds } } },
+          { $group: { _id: '$post', count: { $sum: 1 } } }
+        ])
+      ]);
+
+      // Create lookup maps
+      const likeCountMap = new Map(likeCounts.map(l => [l._id.toString(), l.count]));
+      const commentCountMap = new Map(commentCounts.map(c => [c._id.toString(), c.count]));
+
+      // Get current user's likes for these posts
+      const userLikes = await Like.find({
+        post: { $in: postIds },
+        user: req.user._id
+      }).select('post');
+      const likedPostIds = new Set(userLikes.map(l => l.post.toString()));
+
+      const postsWithCounts = posts.map((p) => {
+        const postId = p._id.toString();
+        return {
+          ...postToFrontendFormat(p),
+          likeCount: likeCountMap.get(postId) || 0,
+          commentCount: commentCountMap.get(postId) || 0,
+          isLiked: likedPostIds.has(postId),
+        };
+      });
 
       const total = await Post.countDocuments(filter);
+      const totalPages = Math.ceil(total / limitNum);
 
       res.status(200).json({
         success: true,
         count: posts.length,
         total,
-        data: posts.map((p) => postToFrontendFormat(p)),
+        page: pageNum,
+        limit: limitNum,
+        totalPages,
+        hasNextPage: pageNum < totalPages,
+        hasPrevPage: pageNum > 1,
+        data: postsWithCounts,
       });
     } catch (error) {
       next(error);
@@ -247,10 +299,7 @@ class PostController {
   async getPostById(req, res, next) {
     try {
       const { id } = req.params;
-      console.log("id", id);
-      const post = await Post.findById(id).populate('user', 'name');
-
-      console.log("post", post);
+      const post = await Post.findById(id).populate('user', 'name profile_image_url');
 
       if (!post) {
         return res.status(404).json({
@@ -259,9 +308,21 @@ class PostController {
         });
       }
 
+      // Get like count, comment count, and isLiked for this post
+      const [likeCount, commentCount, userLike] = await Promise.all([
+        Like.countDocuments({ post: id }),
+        Comment.countDocuments({ post: id }),
+        Like.findOne({ post: id, user: req.user._id })
+      ]);
+
       res.status(200).json({
         success: true,
-        data: postToFrontendFormat(post),
+        data: {
+          ...postToFrontendFormat(post),
+          likeCount,
+          commentCount,
+          isLiked: !!userLike,
+        },
       });
     } catch (error) {
       next(error);
@@ -320,9 +381,272 @@ class PostController {
         });
       }
 
+      // Clean up likes and comments
+      await Like.deleteMany({ post: id });
+      await Comment.deleteMany({ post: id });
+
       res.status(200).json({
         success: true,
         message: 'Post deleted successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Like a post
+   * POST /api/posts/:id/like
+   */
+  async likePost(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      // Check if post exists
+      const post = await Post.findById(id);
+      if (!post) {
+        return res.status(404).json({
+          success: false,
+          message: 'Post not found',
+        });
+      }
+
+      // Create like (will fail if already liked due to unique index)
+      try {
+        const like = new Like({
+          post: id,
+          user: req.user._id,
+        });
+        await like.save();
+      } catch (err) {
+        if (err.code === 11000) {
+          return res.status(400).json({
+            success: false,
+            message: 'You already liked this post',
+          });
+        }
+        throw err;
+      }
+
+      // Get updated like count
+      const likeCount = await Like.countDocuments({ post: id });
+
+      res.status(200).json({
+        success: true,
+        message: 'Post liked successfully',
+        likeCount,
+        isLiked: true,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Unlike a post
+   * DELETE /api/posts/:id/like
+   */
+  async unlikePost(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      const result = await Like.findOneAndDelete({
+        post: id,
+        user: req.user._id,
+      });
+
+      if (!result) {
+        return res.status(400).json({
+          success: false,
+          message: 'You have not liked this post',
+        });
+      }
+
+      // Get updated like count
+      const likeCount = await Like.countDocuments({ post: id });
+
+      res.status(200).json({
+        success: true,
+        message: 'Post unliked successfully',
+        likeCount,
+        isLiked: false,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Add a comment to a post
+   * POST /api/posts/:id/comments
+   */
+  async addComment(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { text, parentComment } = req.body;
+
+      if (!text || !text.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Comment text is required',
+        });
+      }
+
+      // Check if post exists
+      const post = await Post.findById(id);
+      if (!post) {
+        return res.status(404).json({
+          success: false,
+          message: 'Post not found',
+        });
+      }
+
+      // If it's a reply, verify parent comment exists
+      if (parentComment) {
+        const parent = await Comment.findById(parentComment);
+        if (!parent) {
+          return res.status(404).json({
+            success: false,
+            message: 'Parent comment not found',
+          });
+        }
+      }
+
+      const comment = new Comment({
+        post: id,
+        user: req.user._id,
+        text: text.trim(),
+        parentComment: parentComment || null,
+      });
+
+      await comment.save();
+      await comment.populate('user', 'name profile_image_url');
+
+      // Get updated comment count
+      const commentCount = await Comment.countDocuments({ post: id });
+
+      res.status(201).json({
+        success: true,
+        message: 'Comment added successfully',
+        data: {
+          _id: comment._id,
+          text: comment.text,
+          user: comment.user,
+          createdAt: comment.createdAt,
+          parentComment: comment.parentComment,
+        },
+        commentCount,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get comments for a post
+   * GET /api/posts/:id/comments?page=1&limit=20
+   */
+  async getComments(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { page = 1, limit = 20 } = req.query;
+
+      // Check if post exists
+      const post = await Post.findById(id);
+      if (!post) {
+        return res.status(404).json({
+          success: false,
+          message: 'Post not found',
+        });
+      }
+
+      const pageNum = Math.max(1, parseInt(page));
+      const limitNum = Math.min(50, Math.max(1, parseInt(limit)));
+      const skip = (pageNum - 1) * limitNum;
+
+      // Get top-level comments (no parentComment) sorted by newest
+      const comments = await Comment.find({
+        post: id,
+        parentComment: null, // Only top-level comments
+      })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .populate('user', 'name profile_image_url');
+
+      // Get replies for each comment (limited to 5 per comment for performance)
+      const commentsWithReplies = await Promise.all(
+        comments.map(async (comment) => {
+          const replies = await Comment.find({
+            parentComment: comment._id,
+          })
+            .sort({ createdAt: 1 })
+            .limit(5)
+            .populate('user', 'name profile_image_url');
+
+          return {
+            ...comment.toObject(),
+            replies,
+            replyCount: await Comment.countDocuments({ parentComment: comment._id }),
+          };
+        })
+      );
+
+      const total = await Comment.countDocuments({ post: id, parentComment: null });
+      const totalPages = Math.ceil(total / limitNum);
+
+      res.status(200).json({
+        success: true,
+        count: comments.length,
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages,
+        hasNextPage: pageNum < totalPages,
+        hasPrevPage: pageNum > 1,
+        data: commentsWithReplies,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Delete a comment
+   * DELETE /api/posts/:id/comments/:commentId
+   */
+  async deleteComment(req, res, next) {
+    try {
+      const { id, commentId } = req.params;
+
+      const comment = await Comment.findOne({
+        _id: commentId,
+        post: id,
+        user: req.user._id, // Can only delete own comments
+      });
+
+      if (!comment) {
+        return res.status(404).json({
+          success: false,
+          message: 'Comment not found or you are not authorized to delete it',
+        });
+      }
+
+      // Delete the comment and all its replies
+      await Comment.deleteMany({
+        $or: [
+          { _id: commentId },
+          { parentComment: commentId },
+        ],
+      });
+
+      // Get updated comment count
+      const commentCount = await Comment.countDocuments({ post: id });
+
+      res.status(200).json({
+        success: true,
+        message: 'Comment deleted successfully',
+        commentCount,
       });
     } catch (error) {
       next(error);

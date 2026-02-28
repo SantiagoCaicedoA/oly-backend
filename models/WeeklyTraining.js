@@ -19,6 +19,12 @@ const setDetailSchema = new Schema(
     any_pain_or_discomfort: { type: Boolean, default: false },
     pain_level: String,
     pain_where: [String],
+    // AI-generated intent and context for each set
+    intent: {
+      type: String,
+      enum: ['Technical Consistency', 'Speed & Power', 'Strength Under Load', 'Confidence & Exposure'],
+    },
+    context: String, // e.g., "Set 4 of 5" or specific instructions for top sets
   },
   { _id: false }
 );

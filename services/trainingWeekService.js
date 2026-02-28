@@ -58,9 +58,21 @@ function mapResponseToDays(workoutData, profile) {
   const weightLifted = workoutData.weight_lifted;
   const reps = workoutData.reps;
 
+  const VALID_INTENTS = ['Technical Consistency', 'Speed & Power', 'Strength Under Load', 'Confidence & Exposure'];
+
   function mapSet(s, index) {
     if (!s || typeof s !== 'object') return { set_number: index + 1, weight: null, reps: null, rpm_percent: null };
     const w = typeof s.weight === 'number' ? s.weight : (typeof s.weight_lifted === 'number' ? s.weight_lifted : null);
+
+    // Sanitize intent - must be one of valid enum values
+    let intent = typeof s.intent === 'string' ? s.intent : '';
+    if (intent && !VALID_INTENTS.includes(intent)) {
+      // If intent contains context-like text (e.g., "Back-off", "Top Set"), clear it
+      if (intent.toLowerCase().includes('back-off') || intent.toLowerCase().includes('top set')) {
+        intent = ''; // Invalid value, clear it
+      }
+    }
+
     return {
       set_number: typeof s.set_number === 'number' ? s.set_number : (index + 1),
       weight: w != null && w > 0 ? w : null,
@@ -68,6 +80,8 @@ function mapResponseToDays(workoutData, profile) {
       rpm_percent: typeof s.rpm_percent === 'number' ? s.rpm_percent : null,
       coach_prescription: typeof s.coach_prescription === 'string' ? s.coach_prescription : '',
       key_cues: Array.isArray(s.key_cues) ? s.key_cues.filter(c => typeof c === 'string') : [],
+      intent: VALID_INTENTS.includes(intent) ? intent : '',
+      context: typeof s.context === 'string' ? s.context : '',
     };
   }
 

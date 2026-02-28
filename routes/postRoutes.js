@@ -122,4 +122,13 @@ router.get('/:id', postController.getPostById);
 router.put('/:id', postController.updatePost);
 router.delete('/:id', postController.deletePost);
 
+// Like/Unlike routes
+router.post('/:id/like', postController.likePost);
+router.delete('/:id/like', postController.unlikePost);
+
+// Comment routes
+router.post('/:id/comments', postController.addComment);
+router.get('/:id/comments', postController.getComments);
+router.delete('/:id/comments/:commentId', postController.deleteComment);
+
 module.exports = router;

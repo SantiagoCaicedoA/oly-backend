@@ -91,6 +91,8 @@ function normalizeSet(s, index) {
     rpm_percent: typeof s.rpm_percent === 'number' ? s.rpm_percent : null,
     coach_prescription: typeof s.coach_prescription === 'string' ? s.coach_prescription : '',
     key_cues: Array.isArray(s.key_cues) ? s.key_cues.filter((c) => typeof c === 'string') : [],
+    intent: typeof s.intent === 'string' ? s.intent : '',
+    context: typeof s.context === 'string' ? s.context : '',
   };
 }
 

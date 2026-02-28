@@ -16,7 +16,7 @@ if (OPENAI_API_KEY) {
   openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 }
 
-/** JSON schema: each exercise has a "sets" array; each set has set_number, weight, reps, rpm_percent. */
+/** JSON schema: each exercise has a "sets" array; each set has set_number, weight, reps, rpm_percent (MUST BE A NUMBER 0-100, NEVER NULL), intent (training purpose), and context (set position/description). */
 const WORKOUT_TAB_JSON_SCHEMA = `{
   "coach_note": "string",
   "key_cues": ["string"],
@@ -31,8 +31,20 @@ const WORKOUT_TAB_JSON_SCHEMA = `{
             "no_of_set": number,
             "coach_note": "string",
             "sets": [
-              { "set_number": 1, "weight": number, "reps": number, "rpm_percent": number or null, "coach_prescription": "string", "key_cues": ["string"] },
-              { "set_number": 2, "weight": number, "reps": number, "rpm_percent": number or null, "coach_prescription": "string", "key_cues": ["string"] }
+              { "set_number": 1, "weight": number, "reps": number, "rpm_percent": number (0-100, NEVER NULL), "coach_prescription": "string", "key_cues": ["string"], "intent": "Technical Consistency OR Speed & Power OR Strength Under Load OR Confidence & Exposure", "context": "Set 1 of 5" },
+              { "set_number": 2, "weight": number, "reps": number, "rpm_percent": number (0-100, NEVER NULL), "coach_prescription": "string", "key_cues": ["string"], "intent": "ONE OF THE FOUR OPTIONS ONLY", "context": "Set 2 of 5" },
+              { "set_number": 3, "weight": number, "reps": number, "rpm_percent": number (0-100, NEVER NULL), "coach_prescription": "string", "key_cues": ["string"], "intent": "ONE OF THE FOUR OPTIONS ONLY", "context": "Set 3 of 5" },
+              { "set_number": 4, "weight": number, "reps": number, "rpm_percent": number (0-100, NEVER NULL), "coach_prescription": "string", "key_cues": ["string"], "intent": "ONE OF THE FOUR OPTIONS ONLY", "context": "Top Set - Max Effort OR Money Set - Go Heavy" },
+              { "set_number": 5, "weight": number, "reps": number, "rpm_percent": number (0-100, NEVER NULL), "coach_prescription": "string", "key_cues": ["string"], "intent": "ONE OF THE FOUR OPTIONS ONLY", "context": "Back-off Set - Recovery OR Back-off Set - Technique Focus" }
+            ]
+          },
+          {
+            "exercise_name": "string",
+            "time": "string e.g. 15 min",
+            "no_of_set": number,
+            "coach_note": "string",
+            "sets": [
+              { "set_number": 1, "weight": number, "reps": number, "rpm_percent": number (0-100, NEVER NULL), "coach_prescription": "string", "key_cues": ["string"], "intent": "ONE OF THE FOUR OPTIONS ONLY", "context": "Set 1 of 3" }
             ]
           }
       ]
@@ -45,7 +57,7 @@ const WORKOUT_TAB_JSON_SCHEMA = `{
       "no_of_set": number,
       "coach_note": "string",
       "sets": [
-        { "set_number": 1, "weight": number, "reps": number, "rpm_percent": number or null, "coach_prescription": "string", "key_cues": ["string"] }
+        { "set_number": 1, "weight": number, "reps": number, "rpm_percent": number (0-100, NEVER NULL), "coach_prescription": "string", "key_cues": ["string"], "intent": "MUST BE: Technical Consistency OR Speed & Power OR Strength Under Load OR Confidence & Exposure", "context": "MUST BE: Set X of Y OR Top Set - Max Effort OR Back-off Set - Recovery" }
       ]
     }
   ],
@@ -143,17 +155,30 @@ async function generateTrainingResponse({ profile, request, feedback, documentCo
 CRITICAL: Generate the FULL week according to what the athlete chose in onboarding (their profile).
 - Use "Training days/week" (training_days_per_week) from the athlete profile — that is the number of days THEY selected in onboarding. Return exactly that many items in "training_days" (could be 1, 2, 3, 4, 5, or 6 — whatever they chose).
 - Use "Session duration" and "Preferred rest days" from the same profile. Respect session_duration per session and preferred_rest_days when assigning day labels.
-- Each item in training_days: { "day", "day_label", "exercises": [ ... ] }. Each exercise has ONLY: exercise_name, time, no_of_set, sets. Do NOT put coach_prescription or key_cues_of_specific_lift inside an exercise — those go at day level only.
+- CRITICAL — MULTIPLE EXERCISES: Each training day MUST include MULTIPLE exercises (typically 2-4 exercises per day), not just 1. Structure a proper training session with main lifts and accessory work. Each exercise has: exercise_name, time, no_of_set, sets[].
 - CRITICAL — WEIGHT: For every set, "weight" MUST be a positive number. Use the athlete's Strength stats: match the exercise to a lift (e.g. Snatch → classic.snatch value, Snatch Pull → use snatch 1RM × 0.9, Back Squat → squat.back_squat). Formula: weight = Math.round(1RM × percentage). Use 70%, 75%, 80%, 85% etc. for sets 1,2,3,4. Preferred unit is in profile (kg or lbs). NEVER output 0 for weight; if a lift 1RM is missing use 50 kg (or 110 lbs) as fallback.
-- CRITICAL — RPM_PERCENT: For every set, "rpm_percent" MUST be a number (e.g. 70, 75, 80, 85). This is intensity as % of 1RM. Never null for working sets.
-- Each set: set_number (1,2,3...), weight (positive number), reps (positive number), rpm_percent (number), coach_prescription (specific guidance for THIS set), key_cues (array of specific cues for THIS set). no_of_set = sets.length. Ensure key_cues are different for each set if applicable.
+- CRITICAL — SET INTENT (Training Purpose): For every set, include "intent" field. This describes the TRAINING PURPOSE/FOCUS of the set. Choose exactly one of these four values:
+  • "Technical Consistency" - for lighter sets focusing on perfect form
+  • "Speed & Power" - for explosive speed-focused work
+  • "Strength Under Load" - for heavier challenging sets building strength
+  • "Confidence & Exposure" - for max effort/competition simulation
+
+- CRITICAL — SET CONTEXT (Set Position/Description): For every set, include "context" field. This describes the POSITION in the progression or special nature of the set:
+  - Identify the TOP SET: The heaviest OR highest intensity set in the progression (usually the last working set before any back-off sets). This is the "money set" where peak performance matters most.
+  - For NON-TOP sets: Use format "Set X of Y" (e.g., "Set 1 of 5", "Set 2 of 4"). 
+  - For the TOP SET: Use descriptive context like "Top Set - Max Effort", "Peak Intensity Set", or "Money Set - Go Heavy".
+  - For BACK-OFF sets after top set: Use "Back-off Set - Recovery" or "Back-off Set - Technique Focus".
+  - Example progression with 5 sets: "Set 1 of 5", "Set 2 of 5", "Set 3 of 5", "Top Set - Max Effort", "Back-off Set - Recovery".
+
+IMPORTANT: NEVER put "Back-off Set - Recovery" or "Top Set" descriptions in the intent field - those belong in context!
+- Each set: set_number (1,2,3...), weight (positive number), reps (positive number), rpm_percent (number, never null), coach_prescription (specific guidance for THIS set), key_cues (array of specific cues for THIS set), intent (MUST be one of: Technical Consistency, Speed & Power, Strength Under Load, Confidence & Exposure), context (MUST be "Set X of Y" for non-top sets, or specific description for top/special sets). no_of_set = sets.length. Ensure key_cues are different for each set if applicable.
 - todays_training: same structure as training_days[0].exercises.
 
 You must respond with ONLY a valid JSON object, no markdown and no text before or after. Use this exact shape:
 
 ${WORKOUT_TAB_JSON_SCHEMA}
 
-- training_days: length = athlete's "Training days/week". Each exercise: exercise_name, time, no_of_set, coach_note (for the full exercise), sets[]. Each set: set_number, weight (positive, from Strength stats), reps, rpm_percent (number, never null), coach_prescription (string), key_cues (array of strings).
+- training_days: length = athlete's "Training days/week". Each exercise: exercise_name, time, no_of_set, coach_note (for the full exercise), sets[]. Each set: set_number, weight (positive, from Strength stats), reps, rpm_percent (number, never null), coach_prescription (string), key_cues (array of strings), intent (MUST be one of: Technical Consistency, Speed & Power, Strength Under Load, Confidence & Exposure), context (MUST describe the set - "Set X of Y" for most sets, special text for top sets).
 - coach_note, key_cues, coach_prescription, key_cues_of_specific_lift go at the day/root level as well (for general notes), but set-level and exercise-level notes are preferred for specific guidance.
 - daily_check_in: contains sleep_quality, stress_level, and mental_readiness as numbers 1-10 (provide realistic values, not null).
 - suggested_exercises: as before.
@@ -269,7 +294,9 @@ RESPONSE FORMAT (JSON):
           "reps": number,
           "rpm_percent": number,
           "coach_prescription": "string",
-          "key_cues": ["string"]
+          "key_cues": ["string"],
+          "intent": "string (one of: Technical Consistency, Speed & Power, Strength Under Load, Confidence & Exposure)",
+          "context": "string (Set X of Y for non-top sets, special text for top/back-off sets)"
         }
       ]
     }
@@ -277,6 +304,12 @@ RESPONSE FORMAT (JSON):
   "coach_note": "string explaining the adjustment",
   "key_cues": ["string"]
 }
+
+For context field, follow these rules:
+- Identify the TOP SET: The heaviest OR highest intensity set (usually last working set before back-offs)
+- For NON-TOP sets: Use format "Set X of Y"
+- For TOP SET: Use "Top Set - Max Effort" or similar
+- For BACK-OFF sets: Use "Back-off Set - Recovery" or similar
 
 Focus on safety and recovery. Be conservative with adjustments. Return only valid JSON.
 `;

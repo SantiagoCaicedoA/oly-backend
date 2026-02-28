@@ -21,6 +21,7 @@ const PostSchema = new Schema(
     load_lifted: { type: Number, default: null },
     load_unit: { type: String, enum: ['kg', 'lbs'], default: 'kg' },
     context: { type: String, default: '' },
+    context_value: { type: String, default: '' },
     intent: { type: String, default: '' },
     effort: { type: String, default: '' },
 

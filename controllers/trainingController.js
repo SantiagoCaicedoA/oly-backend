@@ -67,8 +67,8 @@ async function generate(req, res, next) {
 }
 
 /**
- * GET /api/training/week – Current user's stored week (monday..sunday with training or rest).
- * Returns the latest week for the user (avoids date/timezone exact-match issues).
+ * GET /api/training/week
+ * Returns the latest weekly training data for the authenticated user.
  */
 async function getWeek(req, res, next) {
   try {
@@ -159,6 +159,8 @@ async function logActivity(req, res, next) {
               rpm_percent: incomingSet.rpm_percent,
               coach_prescription: incomingSet.coach_prescription || existingSet.coach_prescription,
               key_cues: incomingSet.key_cues || existingSet.key_cues,
+              intent: incomingSet.intent || existingSet.intent || '',
+              context: incomingSet.context || existingSet.context || '',
               bar_speed: incomingSet.bar_speed || '',
               position_quality: incomingSet.position_quality || '',
               was_it_a_miss: incomingSet.was_it_a_miss || false,
@@ -183,6 +185,8 @@ async function logActivity(req, res, next) {
           rpm_percent: s.rpm_percent,
           coach_prescription: s.coach_prescription || '',
           key_cues: Array.isArray(s.key_cues) ? s.key_cues : [],
+          intent: s.intent || '',
+          context: s.context || '',
           bar_speed: s.bar_speed || '',
           position_quality: s.position_quality || '',
           was_it_a_miss: s.was_it_a_miss || false,
@@ -221,4 +225,198 @@ async function logActivity(req, res, next) {
   }
 }
 
-module.exports = { generate, getWeek, logActivity };
+module.exports = { generate, getWeek, logActivity, addCustomSet, deleteCustomSet };
+
+/**
+ * POST /api/training/week/custom-set
+ * Body: { day: string, exercise_index: number }
+ * Duplicates the last AI set and adds it to the main sets array.
+ */
+async function addCustomSet(req, res, next) {
+  try {
+    const userId = req.user._id;
+    const { day, exercise_index } = req.body;
+
+    if (!day || typeof day !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing "day" (string) in request body.',
+      });
+    }
+
+    if (typeof exercise_index !== 'number' || exercise_index < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid "exercise_index" (number) in request body.',
+      });
+    }
+
+    const doc = await WeeklyTraining.findOne({ user: userId }).sort({ week_start: -1 });
+
+    if (!doc) {
+      return res.status(404).json({
+        success: false,
+        message: 'No weekly training document found for this user.',
+      });
+    }
+
+    if (!doc.days[day] || !doc.days[day].exercises) {
+      return res.status(400).json({
+        success: false,
+        message: `Day "${day}" does not exist or has no exercises.`,
+      });
+    }
+
+    const exercises = doc.days[day].exercises;
+    if (exercise_index >= exercises.length) {
+      return res.status(404).json({
+        success: false,
+        message: `Exercise at index ${exercise_index} not found.`,
+      });
+    }
+
+    // Get the exercise
+    const exercise = exercises[exercise_index];
+
+    // Initialize sets array if not exists
+    if (!exercise.sets) {
+      exercise.sets = [];
+    }
+
+    // Get the last set to duplicate
+    const sets = exercise.sets;
+    if (sets.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No existing sets found to duplicate.',
+      });
+    }
+
+    // Duplicate the last set with DEEP COPY to prevent shared references
+    const lastSet = sets[sets.length - 1];
+    const newSet = JSON.parse(JSON.stringify(lastSet.toObject()));
+    delete newSet._id; // Let MongoDB generate new _id
+    newSet.set_number = sets.length + 1;
+
+    // Add to main sets array
+    sets.push(newSet);
+
+    // Update no_of_set count
+    exercise.no_of_set = sets.length;
+
+    // Mark as modified
+    doc.markModified(`days.${day}.exercises.${exercise_index}.sets`);
+    doc.markModified(`days.${day}.exercises.${exercise_index}.no_of_set`);
+    await doc.save();
+
+    res.status(201).json({
+      success: true,
+      message: `Set duplicated and added successfully.`,
+      data: {
+        set: newSet,
+        total_sets: sets.length,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * DELETE /api/training/week/custom-set
+ * Body: { day: string, exercise_index: number, set_index: number }
+ * Deletes a set from the main sets array (deletes the last set if set_index not provided).
+ */
+async function deleteCustomSet(req, res, next) {
+  try {
+    const userId = req.user._id;
+    const { day, exercise_index, set_index } = req.body;
+
+    if (!day || typeof day !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing "day" (string) in request body.',
+      });
+    }
+
+    if (typeof exercise_index !== 'number' || exercise_index < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing or invalid "exercise_index" (number) in request body.',
+      });
+    }
+
+    const doc = await WeeklyTraining.findOne({ user: userId }).sort({ week_start: -1 });
+
+    if (!doc) {
+      return res.status(404).json({
+        success: false,
+        message: 'No weekly training document found for this user.',
+      });
+    }
+
+    if (!doc.days[day] || !doc.days[day].exercises) {
+      return res.status(404).json({
+        success: false,
+        message: `Day "${day}" does not exist or has no exercises.`,
+      });
+    }
+
+    const exercises = doc.days[day].exercises;
+    if (exercise_index >= exercises.length) {
+      return res.status(404).json({
+        success: false,
+        message: `Exercise at index ${exercise_index} not found.`,
+      });
+    }
+
+    const exercise = exercises[exercise_index];
+    const sets = exercise.sets || [];
+
+    if (sets.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No sets found to delete.',
+      });
+    }
+
+    // Determine which set to delete (default to last set if not specified)
+    const indexToDelete = typeof set_index === 'number' && set_index >= 0 && set_index < sets.length
+      ? set_index
+      : sets.length - 1;
+
+    if (indexToDelete < 0 || indexToDelete >= sets.length) {
+      return res.status(404).json({
+        success: false,
+        message: `Set at index ${indexToDelete} not found.`,
+      });
+    }
+
+    // Remove the set at the specified index
+    const deletedSet = sets.splice(indexToDelete, 1)[0];
+
+    // Renumber remaining sets
+    sets.forEach((set, idx) => {
+      set.set_number = idx + 1;
+    });
+
+    // Update no_of_set count
+    exercise.no_of_set = sets.length;
+
+    // Mark as modified
+    doc.markModified(`days.${day}.exercises.${exercise_index}.sets`);
+    doc.markModified(`days.${day}.exercises.${exercise_index}.no_of_set`);
+    await doc.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Set deleted successfully.`,
+      data: {
+        deleted_set: deletedSet,
+        total_sets: sets.length,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
