@@ -9,6 +9,7 @@ const setDetailSchema = new Schema(
     weight: Number,
     reps: Number,
     rpm_percent: Number,
+    isComplete: { type: Boolean, default: false },
     coach_prescription: String,
     key_cues: [String],
     bar_speed: String,
@@ -68,6 +69,11 @@ const trainingDayContentSchema = new Schema(
     // Legacy day-level values (optional; prefer per-exercise reps/weight)
     weight_lifted: Number,
     reps: Number,
+    completion: {
+      isComplete: { type: Boolean, default: false },
+      completed_at: Date,
+      sets_logged: Number,
+    },
   },
   { _id: false }
 );

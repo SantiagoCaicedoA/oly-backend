@@ -133,4 +133,28 @@ async function uploadPostVideo(buffer, mimeType, userId) {
   return url;
 }
 
-module.exports = { uploadProfileImage, uploadProfileVideo, uploadVideo, uploadPostVideo, s3Client };
+/**
+ * Upload post thumbnail to S3 (image shown in feed instead of loading full video). Returns public URL.
+ */
+async function uploadPostThumbnail(buffer, mimeType, userId) {
+  if (!ALLOWED_MIMES.includes(mimeType)) {
+    throw new Error(`Invalid thumbnail type. Allowed: ${ALLOWED_MIMES.join(', ')}`);
+  }
+
+  const ext = MIME_TO_EXT[mimeType] || '.jpg';
+  const key = `posts/${userId}/thumbnails/${Date.now()}-${Math.random().toString(36).slice(2, 9)}${ext}`;
+
+  await s3Client.send(
+    new PutObjectCommand({
+      Bucket: imageBucket,
+      Key: key,
+      Body: buffer,
+      ContentType: mimeType,
+    })
+  );
+
+  const url = `https://${imageBucket}.s3.${region}.amazonaws.com/${key}`;
+  return url;
+}
+
+module.exports = { uploadProfileImage, uploadProfileVideo, uploadVideo, uploadPostVideo, uploadPostThumbnail, s3Client };

@@ -7,6 +7,7 @@ const postRoutes = require('./postRoutes');
 const trainingRoutes = require('./trainingRoutes');
 const dailyCheckInRoutes = require('./dailyCheckInRoutes');
 const v1AuthRoutes = require('./v1AuthRoutes');
+const setLogRoutes = require('./setLogRoutes');
 
 // API Routes
 router.use('/users', userRoutes);
@@ -16,6 +17,7 @@ router.use('/posts', postRoutes);
 router.use('/training', trainingRoutes);
 router.use('/daily', dailyCheckInRoutes);
 router.use('/v1/auth', v1AuthRoutes);
+router.use('/set-log', setLogRoutes);
 
 // Health check route
 router.get('/health', (req, res) => {

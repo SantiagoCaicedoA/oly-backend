@@ -61,7 +61,7 @@ function mapResponseToDays(workoutData, profile) {
   const VALID_INTENTS = ['Technical Consistency', 'Speed & Power', 'Strength Under Load', 'Confidence & Exposure'];
 
   function mapSet(s, index) {
-    if (!s || typeof s !== 'object') return { set_number: index + 1, weight: null, reps: null, rpm_percent: null };
+    if (!s || typeof s !== 'object') return { set_number: index + 1, weight: null, reps: null, rpm_percent: null, isComplete: false };
     const w = typeof s.weight === 'number' ? s.weight : (typeof s.weight_lifted === 'number' ? s.weight_lifted : null);
 
     // Sanitize intent - must be one of valid enum values
@@ -78,6 +78,7 @@ function mapResponseToDays(workoutData, profile) {
       weight: w != null && w > 0 ? w : null,
       reps: typeof s.reps === 'number' ? s.reps : null,
       rpm_percent: typeof s.rpm_percent === 'number' ? s.rpm_percent : null,
+      isComplete: false, // Default to false for AI-generated sets
       coach_prescription: typeof s.coach_prescription === 'string' ? s.coach_prescription : '',
       key_cues: Array.isArray(s.key_cues) ? s.key_cues.filter(c => typeof c === 'string') : [],
       intent: VALID_INTENTS.includes(intent) ? intent : '',
@@ -98,12 +99,18 @@ function mapResponseToDays(workoutData, profile) {
   const days = {};
   for (const dayName of DAY_NAMES) {
     if (isRestDay(dayName, preferredRestDays)) {
-      days[dayName] = { type: 'rest' };
+      days[dayName] = {
+        type: 'rest',
+        completion: { isComplete: false, completed_at: null, sets_logged: 0 }
+      };
       continue;
     }
     const td = dayToTraining[dayName];
     if (!td || !Array.isArray(td.exercises) || td.exercises.length === 0) {
-      days[dayName] = { type: 'rest' };
+      days[dayName] = {
+        type: 'rest',
+        completion: { isComplete: false, completed_at: null, sets_logged: 0 }
+      };
       continue;
     }
     const validExercises = td.exercises.filter(isExercise);
@@ -115,7 +122,13 @@ function mapResponseToDays(workoutData, profile) {
         sleep_quality: workoutData.daily_check_in?.sleep_quality ?? 5,
         stress_level: workoutData.daily_check_in?.stress_level ?? 5,
         mental_readiness: workoutData.daily_check_in?.mental_readiness ?? 5,
-      }, exercises: validExercises.map((e) => {
+      },
+      completion: {
+        isComplete: false,
+        completed_at: null,
+        sets_logged: 0
+      },
+      exercises: validExercises.map((e) => {
         const rawSets = Array.isArray(e.sets) ? e.sets : [];
         const sets = rawSets.map((s, i) => mapSet(s, i));
         return {

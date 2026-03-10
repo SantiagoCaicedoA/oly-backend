@@ -3,7 +3,7 @@ const fs = require('fs');
 const Post = require('../models/Post');
 const Like = require('../models/Like');
 const Comment = require('../models/Comment');
-const { uploadPostVideo } = require('../services/s3Service');
+const { uploadPostVideo, uploadPostThumbnail } = require('../services/s3Service');
 
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'images');
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -113,7 +113,7 @@ function normalizePostBody(body) {
   return out;
 }
 
-/** Convert post document to frontend response shape (is_private, is_public, lift_name, opinion, session_detail). image_url omitted from response. */
+/** Convert post document to frontend response shape. Includes thumbnail_url so feed can show thumbnails instead of loading all videos. */
 function postToFrontendFormat(post) {
   const p = post && typeof post.toObject === 'function' ? post.toObject() : { ...post };
   const visibility = p.visibility || [];
@@ -124,6 +124,7 @@ function postToFrontendFormat(post) {
     name: p.name || '',
     username: p.username || '',
     video_url: p.video_url || '',
+    thumbnail_url: p.thumbnail_url || '',
     is_private: !isPublic,
     is_public: isPublic,
     lift_name: p.lift_name || '',
@@ -133,6 +134,7 @@ function postToFrontendFormat(post) {
     status: p.status || 'DRAFT',
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
+    country: p.user?.profile?.country || '',
   };
 }
 
@@ -178,6 +180,26 @@ class PostController {
         body.video_url = videoUrl;
       }
 
+      // Thumbnail: optional — upload (field "thumbnail") or thumbnail_url in body (for feed so app doesn't load all videos)
+      const thumbnailFile = req.files && req.files.thumbnail && req.files.thumbnail[0];
+      if (thumbnailFile) {
+        if (thumbnailFile.size > MAX_IMAGE_SIZE) {
+          return res.status(400).json({
+            success: false,
+            message: 'Thumbnail must be 5MB or less',
+            errors: [{ field: 'thumbnail', message: 'Thumbnail must be 5MB or less' }],
+          });
+        }
+        const thumbnailUrl = await uploadPostThumbnail(
+          thumbnailFile.buffer,
+          thumbnailFile.mimetype,
+          String(req.user._id)
+        );
+        body.thumbnail_url = thumbnailUrl;
+      } else {
+        body.thumbnail_url = body.thumbnail_url || '';
+      }
+
       body = normalizePostBody(body);
 
       const post = new Post({
@@ -186,6 +208,7 @@ class PostController {
         username: body.username ?? '',
         image_url: body.image_url ?? '',
         video_url: body.video_url ?? '',
+        thumbnail_url: body.thumbnail_url ?? '',
         lift_name: body.lift_name ?? '',
         opinion: body.opinion ?? '',
         session_detail: body.session_detail != null ? body.session_detail : null,
@@ -238,7 +261,7 @@ class PostController {
         .sort({ createdAt: -1 })
         .limit(limitNum)
         .skip(skip)
-        .populate('user', 'name profile_image_url');
+        .populate('user', 'name profile_image_url profile.country');
 
       // Get like counts and comment counts for all posts efficiently
       const postIds = posts.map(p => p._id);
@@ -299,7 +322,7 @@ class PostController {
   async getPostById(req, res, next) {
     try {
       const { id } = req.params;
-      const post = await Post.findById(id).populate('user', 'name profile_image_url');
+      const post = await Post.findById(id).populate('user', 'name profile_image_url profile.country');
 
       if (!post) {
         return res.status(404).json({

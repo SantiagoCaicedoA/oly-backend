@@ -7,9 +7,10 @@ const PostSchema = new Schema(
     name: { type: String, default: '' },
     username: { type: String, default: '' },
 
-    // Media (video required; image optional)
+    // Media (video required; image optional; thumbnail optional – for feed so app doesn't load all videos)
     image_url: { type: String, default: '' },
     video_url: { type: String, default: '' }, // required: upload (field "video") or video_url in body
+    thumbnail_url: { type: String, default: '' }, // optional: upload (field "thumbnail") or thumbnail_url in body – shown in feed
 
     // Frontend: lift name (e.g. "Clean & Jerk")
     lift_name: { type: String, default: '' },

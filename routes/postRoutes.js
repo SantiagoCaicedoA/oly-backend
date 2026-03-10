@@ -77,6 +77,7 @@ const requireVideo = (req, res, next) => {
 const createPostValidation = [
   body('image_url').optional().trim().isLength({ max: 2048 }),
   body('video_url').optional().trim().isLength({ max: 2048 }),
+  body('thumbnail_url').optional().trim().isLength({ max: 2048 }),
   body('data').optional(), // JSON string of full payload (merged into body by mergePostBody)
   body('body').optional(),
   body('payload').optional(),

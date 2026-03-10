@@ -1,4 +1,5 @@
 const WeeklyTraining = require('../models/WeeklyTraining');
+const SetLog = require('../models/SetLog');
 const { generateTrainingResponse } = require('../services/openaiService');
 const { normalizeWorkoutTabData } = require('../utils/workoutTabSchema');
 
@@ -85,6 +86,16 @@ async function getWeek(req, res, next) {
       });
     }
 
+    // DEBUG: Log completion data for each day
+    console.log('=== DEBUG: Checking completion data ===');
+    Object.keys(doc.days || {}).forEach(day => {
+      const dayData = doc.days[day];
+      console.log(`${day}:`, {
+        hasCompletion: !!dayData.completion,
+        completion: dayData.completion
+      });
+    });
+
     res.status(200).json({
       success: true,
       data: {
@@ -152,11 +163,14 @@ async function logActivity(req, res, next) {
           const incomingSet = incomingExercise.sets.find((s) => s.set_number === existingSet.set_number);
           if (incomingSet) {
             // Update this specific set, preserving existing coach_prescription and key_cues
+            const hasWeightAndReps = incomingSet.weight !== undefined && incomingSet.weight !== null &&
+              incomingSet.reps !== undefined && incomingSet.reps !== null;
             return {
               set_number: existingSet.set_number,
               weight: incomingSet.weight,
               reps: incomingSet.reps,
               rpm_percent: incomingSet.rpm_percent,
+              isComplete: hasWeightAndReps,
               coach_prescription: incomingSet.coach_prescription || existingSet.coach_prescription,
               key_cues: incomingSet.key_cues || existingSet.key_cues,
               intent: incomingSet.intent || existingSet.intent || '',
@@ -178,24 +192,29 @@ async function logActivity(req, res, next) {
         // Add any new sets that weren't in existing exercise
         const newSets = incomingExercise.sets.filter((incomingSet) =>
           !existingEx.sets.some((existingSet) => existingSet.set_number === incomingSet.set_number)
-        ).map((s) => ({
-          set_number: s.set_number,
-          weight: s.weight,
-          reps: s.reps,
-          rpm_percent: s.rpm_percent,
-          coach_prescription: s.coach_prescription || '',
-          key_cues: Array.isArray(s.key_cues) ? s.key_cues : [],
-          intent: s.intent || '',
-          context: s.context || '',
-          bar_speed: s.bar_speed || '',
-          position_quality: s.position_quality || '',
-          was_it_a_miss: s.was_it_a_miss || false,
-          where_did_it_fail: s.where_did_it_fail || '',
-          missed_where: s.missed_where || '',
-          any_pain_or_discomfort: s.any_pain_or_discomfort || false,
-          pain_level: s.pain_level || '',
-          pain_where: Array.isArray(s.pain_where) ? s.pain_where : [],
-        }));
+        ).map((s) => {
+          const hasWeightAndReps = s.weight !== undefined && s.weight !== null &&
+            s.reps !== undefined && s.reps !== null;
+          return {
+            set_number: s.set_number,
+            weight: s.weight,
+            reps: s.reps,
+            rpm_percent: s.rpm_percent,
+            isComplete: hasWeightAndReps,
+            coach_prescription: s.coach_prescription || '',
+            key_cues: Array.isArray(s.key_cues) ? s.key_cues : [],
+            intent: s.intent || '',
+            context: s.context || '',
+            bar_speed: s.bar_speed || '',
+            position_quality: s.position_quality || '',
+            was_it_a_miss: s.was_it_a_miss || false,
+            where_did_it_fail: s.where_did_it_fail || '',
+            missed_where: s.missed_where || '',
+            any_pain_or_discomfort: s.any_pain_or_discomfort || false,
+            pain_level: s.pain_level || '',
+            pain_where: Array.isArray(s.pain_where) ? s.pain_where : [],
+          };
+        });
 
         return {
           exercise_name: existingEx.exercise_name,
@@ -214,6 +233,30 @@ async function logActivity(req, res, next) {
     // Mark as modified since it's a Mixed type or Nested object
     doc.markModified(`days.${day}.exercises`);
     await doc.save();
+
+    // Create SetLog entries for completed sets (sets with weight and reps)
+    const setLogPromises = [];
+    updatedExercises.forEach(exercise => {
+      exercise.sets.forEach(set => {
+        // Only log sets that have actual weight/reps data (completed sets)
+        if (set.weight !== undefined && set.reps !== undefined && set.weight !== null && set.reps !== null) {
+          setLogPromises.push(
+            SetLog.create({
+              user: userId,
+              set_number: set.set_number,
+              exercise_name: exercise.exercise_name,
+              time: exercise.time || '',
+              day: day,
+            })
+          );
+        }
+      });
+    });
+
+    // Save all set logs in parallel
+    if (setLogPromises.length > 0) {
+      await Promise.all(setLogPromises);
+    }
 
     res.status(200).json({
       success: true,
@@ -283,7 +326,7 @@ async function addCustomSet(req, res, next) {
       exercise.sets = [];
     }
 
-    // Get the last set to duplicate
+    // Get the last set to duplicate (clone "as is" – weight, reps, cues, intent, context etc.)
     const sets = exercise.sets;
     if (sets.length === 0) {
       return res.status(400).json({
@@ -292,13 +335,14 @@ async function addCustomSet(req, res, next) {
       });
     }
 
-    // Duplicate the last set with DEEP COPY to prevent shared references
     const lastSet = sets[sets.length - 1];
-    const newSet = JSON.parse(JSON.stringify(lastSet.toObject()));
-    delete newSet._id; // Let MongoDB generate new _id
+    const lastObj = lastSet && typeof lastSet.toObject === 'function' ? lastSet.toObject() : { ...lastSet };
+    const newSet = JSON.parse(JSON.stringify(lastObj));
+    delete newSet._id;
     newSet.set_number = sets.length + 1;
+    // Naya set hamesha incomplete – chahe upar wala isComplete: true hi kyu na ho
+    newSet.isComplete = false;
 
-    // Add to main sets array
     sets.push(newSet);
 
     // Update no_of_set count
