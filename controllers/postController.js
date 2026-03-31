@@ -597,7 +597,10 @@ class PostController {
         .limit(limitNum)
         .populate('user', 'name profile_image_url');
 
+      const userId = req.user._id;
+
       // Get replies for each comment (limited to 5 per comment for performance)
+      // Include likes_count and is_liked for each comment and reply
       const commentsWithReplies = await Promise.all(
         comments.map(async (comment) => {
           const replies = await Comment.find({
@@ -607,9 +610,23 @@ class PostController {
             .limit(5)
             .populate('user', 'name profile_image_url');
 
+          // Get like data for replies
+          const repliesWithLikes = await Promise.all(
+            replies.map(async (reply) => {
+              const replyObj = reply.toObject();
+              replyObj.likes_count = await Like.countDocuments({ comment: reply._id });
+              replyObj.is_liked = !!(await Like.findOne({ comment: reply._id, user: userId }));
+              return replyObj;
+            })
+          );
+
+          const commentObj = comment.toObject();
+          commentObj.likes_count = await Like.countDocuments({ comment: comment._id });
+          commentObj.is_liked = !!(await Like.findOne({ comment: comment._id, user: userId }));
+
           return {
-            ...comment.toObject(),
-            replies,
+            ...commentObj,
+            replies: repliesWithLikes,
             replyCount: await Comment.countDocuments({ parentComment: comment._id }),
           };
         })
@@ -670,6 +687,90 @@ class PostController {
         success: true,
         message: 'Comment deleted successfully',
         commentCount,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Like a comment
+   * POST /api/posts/:id/comments/:commentId/like
+   */
+  async likeComment(req, res, next) {
+    try {
+      const { id, commentId } = req.params;
+
+      // Check if comment exists and belongs to this post
+      const comment = await Comment.findOne({ _id: commentId, post: id });
+      if (!comment) {
+        return res.status(404).json({
+          success: false,
+          message: 'Comment not found',
+        });
+      }
+
+      // Create like (will fail if already liked due to unique index)
+      try {
+        const like = new Like({
+          post: id,
+          user: req.user._id,
+          comment: commentId,
+        });
+        await like.save();
+      } catch (err) {
+        if (err.code === 11000) {
+          return res.status(400).json({
+            success: false,
+            message: 'You already liked this comment',
+          });
+        }
+        throw err;
+      }
+
+      // Get updated like count
+      const likeCount = await Like.countDocuments({ comment: commentId });
+
+      res.status(200).json({
+        success: true,
+        message: 'Comment liked successfully',
+        likeCount,
+        isLiked: true,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Unlike a comment
+   * DELETE /api/posts/:id/comments/:commentId/like
+   */
+  async unlikeComment(req, res, next) {
+    try {
+      const { id, commentId } = req.params;
+
+      const result = await Like.findOneAndDelete({
+        post: id,
+        user: req.user._id,
+        comment: commentId,
+      });
+
+      if (!result) {
+        return res.status(400).json({
+          success: false,
+          message: 'You have not liked this comment',
+        });
+      }
+
+      // Get updated like count
+      const likeCount = await Like.countDocuments({ comment: commentId });
+
+      res.status(200).json({
+        success: true,
+        message: 'Comment unliked successfully',
+        likeCount,
+        isLiked: false,
       });
     } catch (error) {
       next(error);
