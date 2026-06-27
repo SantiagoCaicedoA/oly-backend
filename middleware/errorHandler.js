@@ -25,10 +25,14 @@ const errorHandler = (err, req, res, next) => {
     statusCode = 400;
     message = err.kind === 'ObjectId' ? 'Invalid ID' : 'Invalid value';
   }
-  // Mongo duplicate key
+  // Mongo duplicate key – report which field actually clashed
   else if (err.code === 11000) {
     statusCode = 409;
-    message = 'Email already exists';
+    const dupField = (err.keyPattern && Object.keys(err.keyPattern)[0]) ||
+      (err.keyValue && Object.keys(err.keyValue)[0]);
+    if (dupField === 'username') message = 'That username is already taken. Please choose another.';
+    else if (dupField === 'email') message = 'Email already exists';
+    else message = 'That value is already taken';
   }
   // Use statusCode/message from error if set
   else if (err.statusCode) {

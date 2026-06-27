@@ -49,6 +49,7 @@ const signinValidation = [
 router.get('/', userController.getAllUsers.bind(userController));
 router.post('/signin', signinValidation, validate, userController.signin.bind(userController));
 router.get('/me', auth, userController.getMe.bind(userController));
+router.get('/check-username', userController.checkUsername.bind(userController));
 router.get('/:id', userController.getUserById.bind(userController));
 // Signup: POST with name, email, password only
 router.post(

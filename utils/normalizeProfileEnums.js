@@ -20,6 +20,18 @@ const ENUMS = {
     values: ['High Intensity', 'Balanced', 'Higher Volume', 'Adaptive'],
     key: (v) => (v && String(v).toLowerCase().replace(/\s+/g, ' ').trim()),
   },
+  // Keys come from the UI already; this mainly turns "" into undefined so an
+  // empty selection never trips the schema enum validation.
+  training_phase: {
+    values: [
+      'starting_fresh',
+      'in_training_block',
+      'post_competition',
+      'deload_recovery',
+      'coming_back',
+    ],
+    key: (v) => (v && String(v).toLowerCase().trim()),
+  },
 };
 
 function findMatch(input, { values, key }) {
@@ -39,6 +51,7 @@ function normalizeTopLevel(obj) {
   if (obj.preferred_unit !== undefined) obj.preferred_unit = findMatch(obj.preferred_unit, ENUMS.preferred_unit);
   if (obj.strength_accuracy !== undefined) obj.strength_accuracy = findMatch(obj.strength_accuracy, ENUMS.strength_accuracy);
   if (obj.training_preference !== undefined) obj.training_preference = findMatch(obj.training_preference, ENUMS.training_preference);
+  if (obj.training_phase !== undefined) obj.training_phase = findMatch(obj.training_phase, ENUMS.training_phase);
 }
 
 const impactLevel = { values: ['Mild', 'Moderate', 'High'], key: (v) => (v && String(v).toLowerCase()) };

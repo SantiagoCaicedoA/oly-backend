@@ -121,6 +121,21 @@ function formatProfileForPrompt(profile) {
   if (p.equipment?.optional?.length) lines.push('Equipment: ' + p.equipment.optional.join(', '));
   if (p.training_preference) lines.push('Training preference: ' + p.training_preference);
   if (p.performance_gaps?.length) lines.push('Performance gaps: ' + p.performance_gaps.join(', '));
+  const PHASE_LABELS = {
+    starting_fresh: 'Starting fresh',
+    in_training_block: 'In a training block',
+    post_competition: 'Post-competition',
+    deload_recovery: 'Deload / Recovery',
+    coming_back: 'Coming back from injury',
+  };
+  if (p.training_phase) lines.push(`Training phase (starting point): ${PHASE_LABELS[p.training_phase] || p.training_phase}`);
+  if (p.competition && p.competition.preparing) {
+    lines.push('Competition: PREPARING for a meet');
+    if (p.competition.name) lines.push(`  Meet name: ${p.competition.name}`);
+    if (p.competition.date) lines.push(`  Meet date: ${p.competition.date}`);
+    if (p.competition.weight_class) lines.push(`  Weight class: ${p.competition.weight_class}`);
+    if (p.competition.target_total != null) lines.push(`  Target total: ${p.competition.target_total}`);
+  }
   return lines.length ? lines.join('\n') : 'No athlete profile available.';
 }
 
@@ -155,6 +170,7 @@ async function generateTrainingResponse({ profile, request, feedback, documentCo
 CRITICAL: Generate the FULL week according to what the athlete chose in onboarding (their profile).
 - Use "Training days/week" (training_days_per_week) from the athlete profile — that is the number of days THEY selected in onboarding. Return exactly that many items in "training_days" (could be 1, 2, 3, 4, 5, or 6 — whatever they chose).
 - Use "Session duration" and "Preferred rest days" from the same profile. Respect session_duration per session and preferred_rest_days when assigning day labels.
+- CRITICAL — TRAINING PHASE & COMPETITION: If the profile has a "Training phase (starting point)", adapt this week to it: "Coming back from injury" = conservative loads, extra warm-up, no maximal efforts; "Deload / Recovery" = reduced volume and intensity; "Post-competition" = lighter technical re-entry; "Starting fresh" = build base with submaximal technique work; "In a training block" = continue progressive overload. If the athlete is "PREPARING for a meet" with a Meet date, periodize toward it: build intensity as the date nears, taper in the final 1-2 weeks, bias toward the competition lifts (snatch, clean & jerk), and aim selections at the Target total if given.
 - CRITICAL — MULTIPLE EXERCISES: Each training day MUST include MULTIPLE exercises (typically 2-4 exercises per day), not just 1. Structure a proper training session with main lifts and accessory work. Each exercise has: exercise_name, time, no_of_set, sets[].
 - CRITICAL — WEIGHT: For every set, "weight" MUST be a positive number. Use the athlete's Strength stats: match the exercise to a lift (e.g. Snatch → classic.snatch value, Snatch Pull → use snatch 1RM × 0.9, Back Squat → squat.back_squat). Formula: weight = Math.round(1RM × percentage). Use 70%, 75%, 80%, 85% etc. for sets 1,2,3,4. Preferred unit is in profile (kg or lbs). NEVER output 0 for weight; if a lift 1RM is missing use 50 kg (or 110 lbs) as fallback.
 - CRITICAL — SET INTENT (Training Purpose): For every set, include "intent" field. This describes the TRAINING PURPOSE/FOCUS of the set. Choose exactly one of these four values:
@@ -203,6 +219,7 @@ Do not give generic programming. Use the athlete profile to decide:
 - Strength stats and experience — scale intensity and complexity accordingly.
 - Training preference (High Intensity / Balanced / etc.) and performance gaps — align sessions to this.
 - Preferred unit (Metric/Imperial) and preferred rest days when suggesting schedule.
+- Training phase (starting point) and any upcoming competition (date, weight class, target total) — periodize and adapt the plan toward the meet, and respect the athlete's current phase.
 
 Follow the document strictly for rules and structure; use the athlete profile for all personalization. Your output must be specific to this athlete, not a generic plan.
 

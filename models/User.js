@@ -58,6 +58,27 @@ const profileSchema = new Schema(
       enum: ['High Intensity', 'Balanced', 'Higher Volume', 'Adaptive'],
     },
     performance_gaps: [String],
+
+    // Where the athlete is starting from (Screen 6)
+    training_phase: {
+      type: String,
+      enum: [
+        'starting_fresh',
+        'in_training_block',
+        'post_competition',
+        'deload_recovery',
+        'coming_back',
+      ],
+    },
+
+    // Upcoming competition the athlete is preparing for (Screen 6)
+    competition: {
+      preparing: { type: Boolean, default: false },
+      name: String,
+      date: String, // ISO 'YYYY-MM-DD' as sent by onboarding
+      weight_class: String,
+      target_total: Number,
+    },
   },
   { _id: false }
 );
@@ -73,6 +94,7 @@ const userSchema = new Schema(
     username: {
       type: String,
       trim: true,
+      lowercase: true, // case-insensitive handles (Instagram-style): stored lowercased
       unique: true,
       sparse: true, // allow null/empty without unique conflict
     },
