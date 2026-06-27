@@ -183,7 +183,15 @@ class ProfileController {
       // it is not silently dropped by the strict profile schema.
       const incomingUsername = body.user_name ?? body.username;
       if (incomingUsername != null && String(incomingUsername).trim() !== '') {
-        req.user.username = String(incomingUsername).trim();
+        const handle = String(incomingUsername).trim().toLowerCase();
+        const taken = await User.exists({ username: handle, _id: { $ne: req.user._id } });
+        if (taken) {
+          return res.status(409).json({
+            success: false,
+            message: 'That username is already taken. Please choose another.',
+          });
+        }
+        req.user.username = handle;
       }
       delete body.user_name;
       delete body.username;

@@ -39,6 +39,9 @@ class UserService {
       return user;
     } catch (error) {
       if (error.code === 11000) {
+        const dupField = (error.keyPattern && Object.keys(error.keyPattern)[0]) ||
+          (error.keyValue && Object.keys(error.keyValue)[0]);
+        if (dupField === 'username') throw new AppError(409, 'That username is already taken. Please choose another.');
         throw new AppError(409, 'Email already exists');
       }
       if (error.name === 'ValidationError') {
@@ -89,7 +92,12 @@ class UserService {
       return user;
     } catch (error) {
       if (error instanceof AppError) throw error;
-      if (error.code === 11000) throw new AppError(409, 'Email already exists');
+      if (error.code === 11000) {
+        const dupField = (error.keyPattern && Object.keys(error.keyPattern)[0]) ||
+          (error.keyValue && Object.keys(error.keyValue)[0]);
+        if (dupField === 'username') throw new AppError(409, 'That username is already taken. Please choose another.');
+        throw new AppError(409, 'Email already exists');
+      }
       if (error.name === 'ValidationError') {
         const msg = Object.values(error.errors).map((e) => e.message).join('. ');
         throw new AppError(400, msg || 'Validation failed');

@@ -38,6 +38,35 @@ class UserController {
   }
 
   /**
+   * GET /api/users/check-username?username=foo
+   * Public, case-insensitive availability check for the live "as you type"
+   * username field. Returns { available, message }.
+   */
+  async checkUsername(req, res, next) {
+    try {
+      const handle = (req.query.username || '').toString().trim().toLowerCase();
+      if (!handle) {
+        return res.status(400).json({ success: false, available: false, message: 'Username is required' });
+      }
+      if (!/^[a-z0-9._]{3,30}$/.test(handle)) {
+        return res.status(200).json({
+          success: true,
+          available: false,
+          message: 'Use 3–30 letters, numbers, dots or underscores',
+        });
+      }
+      const taken = await User.exists({ username: handle });
+      return res.status(200).json({
+        success: true,
+        available: !taken,
+        message: taken ? 'That username is already taken' : 'Username available',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * Get user by ID
    * @param {Object} req
    * @param {Object} res

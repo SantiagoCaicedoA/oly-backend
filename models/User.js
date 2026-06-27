@@ -94,6 +94,7 @@ const userSchema = new Schema(
     username: {
       type: String,
       trim: true,
+      lowercase: true, // case-insensitive handles (Instagram-style): stored lowercased
       unique: true,
       sparse: true, // allow null/empty without unique conflict
     },
