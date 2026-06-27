@@ -177,6 +177,17 @@ class ProfileController {
     try {
       const body = { ...req.body };
       delete body.user;
+
+      // The @handle is a top-level User field, NOT part of the embedded profile.
+      // Onboarding sends it as user_name (or username); persist it on the user so
+      // it is not silently dropped by the strict profile schema.
+      const incomingUsername = body.user_name ?? body.username;
+      if (incomingUsername != null && String(incomingUsername).trim() !== '') {
+        req.user.username = String(incomingUsername).trim();
+      }
+      delete body.user_name;
+      delete body.username;
+
       normalizeProfilePayload(body);
 
       const current =
