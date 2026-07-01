@@ -32,6 +32,10 @@ const ENUMS = {
     ],
     key: (v) => (v && String(v).toLowerCase().trim()),
   },
+  recent_training_volume: {
+    values: ['returning', 'light', 'steady', 'heavy'],
+    key: (v) => (v && String(v).toLowerCase().trim()),
+  },
 };
 
 function findMatch(input, { values, key }) {
@@ -52,6 +56,7 @@ function normalizeTopLevel(obj) {
   if (obj.strength_accuracy !== undefined) obj.strength_accuracy = findMatch(obj.strength_accuracy, ENUMS.strength_accuracy);
   if (obj.training_preference !== undefined) obj.training_preference = findMatch(obj.training_preference, ENUMS.training_preference);
   if (obj.training_phase !== undefined) obj.training_phase = findMatch(obj.training_phase, ENUMS.training_phase);
+  if (obj.recent_training_volume !== undefined) obj.recent_training_volume = findMatch(obj.recent_training_volume, ENUMS.recent_training_volume);
 }
 
 const impactLevel = { values: ['Mild', 'Moderate', 'High'], key: (v) => (v && String(v).toLowerCase()) };

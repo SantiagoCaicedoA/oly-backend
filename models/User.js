@@ -71,6 +71,12 @@ const profileSchema = new Schema(
       ],
     },
 
+    // Recent training load over the last ~4 weeks (Screen 4) – anchors week-1 volume
+    recent_training_volume: {
+      type: String,
+      enum: ['returning', 'light', 'steady', 'heavy'],
+    },
+
     // Upcoming competition the athlete is preparing for (Screen 6)
     competition: {
       preparing: { type: Boolean, default: false },

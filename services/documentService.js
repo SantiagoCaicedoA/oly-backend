@@ -50,7 +50,7 @@ async function loadDocumentText(docPath) {
   if (ext === '.pdf') {
     return extractTextFromPdf(resolved);
   }
-  if (ext === '.txt') {
+  if (ext === '.txt' || ext === '.md' || ext === '.markdown') {
     return fs.promises.readFile(resolved, 'utf-8');
   }
   throw new Error(`Unsupported document type: ${ext}. Use .pdf or .txt`);
@@ -127,9 +127,32 @@ async function getContextForPrompt(userMessage = '') {
   return selected.join('\n\n---\n\n');
 }
 
+let cachedFullText = null;
+let cachedFullPath = null;
+
+/**
+ * Return the ENTIRE reference document as one string (the Oly Training Bible).
+ * Used for training generation, where the whole rulebook must be read in order
+ * (not chunked/keyword-matched). Cached. Returns '' if missing (never throws).
+ */
+async function getFullDocumentText(docPath) {
+  const resolvedPath = docPath || process.env.TRAINING_BIBLE_PATH || 'data/training-bible.md';
+  if (cachedFullText !== null && cachedFullPath === resolvedPath) return cachedFullText;
+  try {
+    const text = await loadDocumentText(resolvedPath);
+    cachedFullText = (text || '').trim();
+  } catch (err) {
+    console.warn('documentService: could not load training bible at', resolvedPath, '-', err.message);
+    cachedFullText = '';
+  }
+  cachedFullPath = resolvedPath;
+  return cachedFullText;
+}
+
 module.exports = {
   loadDocumentText,
   chunkText,
   getDocumentChunks,
   getContextForPrompt,
+  getFullDocumentText,
 };
