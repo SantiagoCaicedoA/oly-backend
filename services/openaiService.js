@@ -270,8 +270,9 @@ Respond only with training logic outputs (blocks, sessions, feedback-based adjus
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userContent },
     ],
-    max_tokens: isWorkoutTab ? 10000 : 2048,
+    max_tokens: isWorkoutTab ? 16000 : 2048,
     temperature: 0.4,
+    ...(isWorkoutTab ? { response_format: { type: 'json_object' } } : {}),
   });
 
   const choice = response.choices?.[0];

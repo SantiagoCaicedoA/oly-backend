@@ -46,8 +46,8 @@ async function generateAndSaveWeek(user, options = {}) {
   let data = null;
   try {
     data = JSON.parse(result.content);
-  } catch {
-    throw new Error('AI did not return valid JSON for training week.');
+  } catch (e) {
+    throw new Error('AI JSON parse failed: ' + (e && e.message) + ' | len=' + String(result.content || '').length + ' | head=' + String(result.content || '').slice(0, 160));
   }
 
   const normalized = normalizeWorkoutTabData(data);
