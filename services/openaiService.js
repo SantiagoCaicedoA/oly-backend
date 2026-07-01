@@ -5,7 +5,7 @@
  * Can return free-form text or structured JSON for the app workout screens.
  */
 
-const { getContextForPrompt } = require('./documentService');
+const { getContextForPrompt, getFullDocumentText } = require('./documentService');
 
 // Initialize OpenAI at module level
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -129,6 +129,13 @@ function formatProfileForPrompt(profile) {
     coming_back: 'Coming back from injury',
   };
   if (p.training_phase) lines.push(`Training phase (starting point): ${PHASE_LABELS[p.training_phase] || p.training_phase}`);
+  const RECENT_LABELS = {
+    returning: 'Coming back from time off (2+ weeks away)',
+    light: 'Lightly — about 1-2 sessions/week recently',
+    steady: 'Steadily — about 3-4 sessions/week recently',
+    heavy: 'Heavy — 5+ sessions/week recently',
+  };
+  if (p.recent_training_volume) lines.push(`Recent training (last 4 weeks): ${RECENT_LABELS[p.recent_training_volume] || p.recent_training_volume}`);
   if (p.competition && p.competition.preparing) {
     lines.push('Competition: PREPARING for a meet');
     if (p.competition.name) lines.push(`  Meet name: ${p.competition.name}`);
@@ -136,6 +143,33 @@ function formatProfileForPrompt(profile) {
     if (p.competition.weight_class) lines.push(`  Weight class: ${p.competition.weight_class}`);
     if (p.competition.target_total != null) lines.push(`  Target total: ${p.competition.target_total}`);
   }
+
+  // ---- Derived context (computed) to help the AI apply the bible reliably ----
+  const derived = [];
+  const gv = (o) => (o && typeof o.value === 'number' && o.value > 0 ? o.value : null);
+  const ss = p.strength_stats || {};
+  const sn = gv(ss.classic && ss.classic.snatch), cj = gv(ss.classic && ss.classic.clean_jerk);
+  const fsq = gv(ss.squat && ss.squat.front_squat), bsq = gv(ss.squat && ss.squat.back_squat);
+  if (sn && cj) derived.push(`Snatch:C&J = ${Math.round((sn / cj) * 100)}% (normal 78-83%; low => snatch is the limiter)`);
+  if (fsq && bsq) derived.push(`Front:back squat = ${Math.round((fsq / bsq) * 100)}% (normal ~85%; low => clean-recovery limiter)`);
+  if (p.experience_years != null) {
+    const ty = p.experience_years;
+    const band = ty < 2 ? 'Developing (<2y)' : ty < 5 ? 'Provincial (~3-4y)' : 'Advanced-candidate (5y+)';
+    derived.push(`Training age: ${ty}y -> ${band}`);
+  }
+  if (p.competition && p.competition.preparing && p.competition.date) {
+    const d = new Date(p.competition.date);
+    if (!isNaN(d.getTime())) derived.push(`Weeks out from meet: ${Math.round((d.getTime() - Date.now()) / (7 * 24 * 3600 * 1000))}`);
+  }
+  const reliable = p.strength_accuracy === 'Tested';
+  const clean = !(p.considerations && p.considerations.has_limitations);
+  let tier = 'Developing';
+  if (!reliable) tier = 'Developing (maxes unproven -> safety gate, Sec 14A)';
+  else if (p.experience_years != null && p.experience_years >= 5 && clean) tier = 'National+ candidate (CONFIRM 14A gates)';
+  else if (p.experience_years != null && p.experience_years >= 3) tier = 'Provincial';
+  derived.push(`Suggested tier: ${tier}`);
+  if (derived.length) lines.push('\nDerived context (computed — confirm against the bible):\n- ' + derived.join('\n- '));
+
   return lines.length ? lines.join('\n') : 'No athlete profile available.';
 }
 
@@ -150,6 +184,41 @@ function formatProfileForPrompt(profile) {
  * @param {string} [options.responseFormat] - 'workout_tab' to get structured JSON for app screens
  * @returns {Promise<{ content: string, usage?: object }>}
  */
+/**
+ * Build the workout-generation system prompt. The AI follows the injected Oly
+ * Training Bible; this prompt only orchestrates the process and locks the JSON shape.
+ */
+function buildWorkoutSystemPrompt(profileSummary, docContext) {
+  return `You are the Oly AI weightlifting coach. Your complete, authoritative programming manual — the OLY TRAINING BIBLE — is provided below. FOLLOW IT EXACTLY; it overrides any generic training assumption. Where the athlete's data is missing, follow the bible's defaults and graceful-degradation rules — never invent your own method.
+
+# THE OLY TRAINING BIBLE (your source of truth)
+${docContext || '(Training bible not loaded.)'}
+
+# THIS ATHLETE
+${profileSummary}
+
+# YOUR TASK — build the training week by applying the bible IN ORDER:
+1. Trust & tier: assess max reliability (Sec 11) and set the athlete tier (Sec 14A gates: experience + confirmed maxes + injury-clean + ratios). Unlock National+ ONLY if all gates pass; otherwise use the conservative default.
+2. Limiter: diagnose from the ratios (5D), performance gaps, and any logged misses (Sec 5).
+3. Timeline: place the week in its phase (Sec 6) — a competitor counts down from the meet date; a non-competitor runs the repeating cycle.
+4. Week structure: lay out EXACTLY the athlete's available days; squat every day on low-frequency weeks; wave Heavy/Moderate/Light; bias the weaker lift (Sec 4). Respect the SESSION TIME BUDGET (4G): a heavy classic lift ~30-40 min, a squat ~15-20 min. Do NOT exceed session_duration — if over, shed accessories then pulls, never the main lifts and never rest time.
+5. Exercises: EVERY exercise states its intention in coach_note; no filler (5A). Use the fault-correction library (5C) for the athlete's weaknesses; pick movements from the library (Sec 2).
+6. Loads: every weight = a percentage of the athlete's TRUE max for the matched lift (Sec 3 zones), using the variation->max conversion factors (9A) for non-competition movements, bounded by Prilepin (9B) and the volume landmarks (4F / 14D for National+). Distrust unproven or Estimated maxes — work 5-10% under (Sec 11). Round to real plates (9F). Classic lifts in singles/doubles ONLY.
+7. Safety & conflicts: obey the never-do rules and defaults (Sec 8) and the priority stack (10A: Safety > time/days > readiness > phase > limiter > balance).
+
+# OUTPUT — JSON ONLY (no markdown, no text before or after). Use this EXACT shape:
+${WORKOUT_TAB_JSON_SCHEMA}
+
+Field rules — map the bible onto these fields:
+- training_days: exactly training_days_per_week items; day_label = weekday names, respecting preferred_rest_days.
+- Each day: multiple exercises per the session shape (4B) within the time budget (4G).
+- Each set: set_number; weight = round(% x TRUE max) in the athlete's unit — always a positive real load, NEVER 0 or a flat fallback; reps per the bible (classic lifts 1-2; squats/pulls by phase); rpm_percent = THE ACTUAL % OF TRUE MAX USED FOR THIS SET (e.g. a set at 82% -> rpm_percent: 82 — never a constant, never null); coach_prescription (cue for this set); key_cues (array); intent (EXACTLY one of: Technical Consistency, Speed & Power, Strength Under Load, Confidence & Exposure); context ("Set X of Y", or "Top Set - Max Effort" / "Back-off Set - Recovery" for special sets — never put context text into intent).
+- coach_note on each exercise MUST state WHY it is in the program (its intention / the fault it fixes) — the no-filler law (5A).
+- daily_check_in: sleep_quality, stress_level, mental_readiness as realistic 1-10 numbers. todays_training: same structure as training_days[0].exercises. suggested_exercises: per the schema.
+
+Output ONLY the JSON object.`;
+}
+
 async function generateTrainingResponse({ profile, request, feedback, documentContext, responseFormat }) {
   if (!OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY is not set. Add it to your .env file.');
@@ -159,53 +228,13 @@ async function generateTrainingResponse({ profile, request, feedback, documentCo
   const docContext =
     documentContext !== undefined
       ? documentContext
-      : await getContextForPrompt(queryForContext);
+      : await getFullDocumentText(); // the whole Oly Training Bible, read in order
 
   const profileSummary = formatProfileForPrompt(profile);
   const isWorkoutTab = responseFormat === 'workout_tab';
 
   const systemPrompt = isWorkoutTab
-    ? `You are the Oly App Training Logic agent. Generate data for the app's Workout tab. Use BOTH sources below.
-
-CRITICAL: Generate the FULL week according to what the athlete chose in onboarding (their profile).
-- Use "Training days/week" (training_days_per_week) from the athlete profile — that is the number of days THEY selected in onboarding. Return exactly that many items in "training_days" (could be 1, 2, 3, 4, 5, or 6 — whatever they chose).
-- Use "Session duration" and "Preferred rest days" from the same profile. Respect session_duration per session and preferred_rest_days when assigning day labels.
-- CRITICAL — TRAINING PHASE & COMPETITION: If the profile has a "Training phase (starting point)", adapt this week to it: "Coming back from injury" = conservative loads, extra warm-up, no maximal efforts; "Deload / Recovery" = reduced volume and intensity; "Post-competition" = lighter technical re-entry; "Starting fresh" = build base with submaximal technique work; "In a training block" = continue progressive overload. If the athlete is "PREPARING for a meet" with a Meet date, periodize toward it: build intensity as the date nears, taper in the final 1-2 weeks, bias toward the competition lifts (snatch, clean & jerk), and aim selections at the Target total if given.
-- CRITICAL — MULTIPLE EXERCISES: Each training day MUST include MULTIPLE exercises (typically 2-4 exercises per day), not just 1. Structure a proper training session with main lifts and accessory work. Each exercise has: exercise_name, time, no_of_set, sets[].
-- CRITICAL — WEIGHT: For every set, "weight" MUST be a positive number. Use the athlete's Strength stats: match the exercise to a lift (e.g. Snatch → classic.snatch value, Snatch Pull → use snatch 1RM × 0.9, Back Squat → squat.back_squat). Formula: weight = Math.round(1RM × percentage). Use 70%, 75%, 80%, 85% etc. for sets 1,2,3,4. Preferred unit is in profile (kg or lbs). NEVER output 0 for weight; if a lift 1RM is missing use 50 kg (or 110 lbs) as fallback.
-- CRITICAL — SET INTENT (Training Purpose): For every set, include "intent" field. This describes the TRAINING PURPOSE/FOCUS of the set. Choose exactly one of these four values:
-  • "Technical Consistency" - for lighter sets focusing on perfect form
-  • "Speed & Power" - for explosive speed-focused work
-  • "Strength Under Load" - for heavier challenging sets building strength
-  • "Confidence & Exposure" - for max effort/competition simulation
-
-- CRITICAL — SET CONTEXT (Set Position/Description): For every set, include "context" field. This describes the POSITION in the progression or special nature of the set:
-  - Identify the TOP SET: The heaviest OR highest intensity set in the progression (usually the last working set before any back-off sets). This is the "money set" where peak performance matters most.
-  - For NON-TOP sets: Use format "Set X of Y" (e.g., "Set 1 of 5", "Set 2 of 4"). 
-  - For the TOP SET: Use descriptive context like "Top Set - Max Effort", "Peak Intensity Set", or "Money Set - Go Heavy".
-  - For BACK-OFF sets after top set: Use "Back-off Set - Recovery" or "Back-off Set - Technique Focus".
-  - Example progression with 5 sets: "Set 1 of 5", "Set 2 of 5", "Set 3 of 5", "Top Set - Max Effort", "Back-off Set - Recovery".
-
-IMPORTANT: NEVER put "Back-off Set - Recovery" or "Top Set" descriptions in the intent field - those belong in context!
-- Each set: set_number (1,2,3...), weight (positive number), reps (positive number), rpm_percent (number, never null), coach_prescription (specific guidance for THIS set), key_cues (array of specific cues for THIS set), intent (MUST be one of: Technical Consistency, Speed & Power, Strength Under Load, Confidence & Exposure), context (MUST be "Set X of Y" for non-top sets, or specific description for top/special sets). no_of_set = sets.length. Ensure key_cues are different for each set if applicable.
-- todays_training: same structure as training_days[0].exercises.
-
-You must respond with ONLY a valid JSON object, no markdown and no text before or after. Use this exact shape:
-
-${WORKOUT_TAB_JSON_SCHEMA}
-
-- training_days: length = athlete's "Training days/week". Each exercise: exercise_name, time, no_of_set, coach_note (for the full exercise), sets[]. Each set: set_number, weight (positive, from Strength stats), reps, rpm_percent (number, never null), coach_prescription (string), key_cues (array of strings), intent (MUST be one of: Technical Consistency, Speed & Power, Strength Under Load, Confidence & Exposure), context (MUST describe the set - "Set X of Y" for most sets, special text for top sets).
-- coach_note, key_cues, coach_prescription, key_cues_of_specific_lift go at the day/root level as well (for general notes), but set-level and exercise-level notes are preferred for specific guidance.
-- daily_check_in: contains sleep_quality, stress_level, and mental_readiness as numbers 1-10 (provide realistic values, not null).
-- suggested_exercises: as before.
-
-## Oly App Training Logic Documentation (excerpts)
-${docContext || '(No document loaded.)'}
-
-## This athlete's profile (from database)
-${profileSummary}
-
-Output ONLY the JSON object.`
+    ? buildWorkoutSystemPrompt(profileSummary, docContext)
 
     : `You are the Oly App Training Logic agent. You must use BOTH sources below for every response:
 
@@ -387,6 +416,7 @@ Focus on safety and recovery. Be conservative with adjustments. Return only vali
 
 module.exports = {
   formatProfileForPrompt,
+  buildWorkoutSystemPrompt,
   generateTrainingResponse,
   generateDailyAdjustment,
 };
