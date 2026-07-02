@@ -235,15 +235,13 @@ function buildDirectives(p) {
     if (r >= 125) {
       D.push('STRENGTH-SUFFICIENT (front squat ' + r + '% of clean): do NOT pile on squats. Squat at most 2x/week at moderate load. REDIRECT the freed volume into the competition lifts, close variations, and SPEED / rate-of-force work: speed pulls, power snatch and power clean, tall and no-feet variants.');
     } else if (bsq && Math.round((fsq / bsq) * 100) < 82) {
-      D.push('CLEAN-RECOVERY LIMITER (front squat lags back squat): prioritise FRONT SQUATS and PAUSE FRONT SQUATS; add a clean + front-squat complex.');
+      D.push('CLEAN-RECOVERY LIMITER (front squat lags back squat): make the squat that day a FRONT SQUAT or PAUSE FRONT SQUAT (NOT an added second squat); a clean + front-squat complex is also good.');
     }
   }
 
   const gapMap = {
     overhead: ['overhead squat', 'snatch balance', 'drop snatch'],
     receiving: ['tall/hang snatch', 'no-feet snatch', 'drop snatch'],
-    squat: ['pause squats', 'tempo squats'],
-    leg: ['pause squats', 'tempo squats'],
     speed: ['speed pulls', 'power snatch/clean', 'tall snatch'],
     pulling: ['pause snatch/clean at knee', 'lifts from blocks', 'RDLs'],
     positioning: ['pause snatch/clean at knee', 'lifts from blocks'],
@@ -255,9 +253,10 @@ function buildDirectives(p) {
     Object.keys(gapMap).forEach((key) => { if (k.includes(key)) corr.push.apply(corr, gapMap[key]); });
   });
   if (corr.length) D.push('INCLUDE THESE CORRECTIVES this week to target the stated gaps (' + gaps.join(', ') + '): ' + Array.from(new Set(corr)).join(', ') + '.');
+  if (gaps.some((g) => /squat|leg/i.test(g))) D.push('SQUAT-STRENGTH FOCUS: address it by making the day squat a PAUSE or TEMPO variation and adding ~1 set - do NOT program a separate second squat as an accessory.');
 
   const nEx = dur >= 90 ? 5 : dur >= 60 ? 4 : 3;
-  D.push('SESSION SHAPE: every training day MUST include AT LEAST ' + nEx + ' exercises (a day with fewer is INVALID): main classic lift + a pull or variation + a squat + 1-2 targeted accessories/correctives, filling the ~' + dur + ' min. A heavy classic lift is ~30-40 min and a squat ~15-20 min.');
+  D.push('SESSION SHAPE: every training day MUST include AT LEAST ' + nEx + ' exercises (a day with fewer is INVALID): main classic lift + a pull or variation + a squat + 1-2 targeted accessories/correctives, filling the ~' + dur + ' min. PROGRAM AT MOST ONE squat-pattern movement per day (back/front/pause/tempo squat all count as the squat; overhead squat is exempt). A heavy classic lift is ~30-40 min and a squat ~15-20 min.');
 
   return D.length ? ('## COACHING DIRECTIVES FOR THIS ATHLETE (COMPUTED, NON-NEGOTIABLE - apply EXACTLY; these OVERRIDE any conflicting bible default):\n- ' + D.join('\n- ')) : '';
 }
