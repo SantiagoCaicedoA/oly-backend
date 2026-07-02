@@ -213,12 +213,12 @@ function buildDirectives(p) {
   D.push('ATHLETE TIER: ' + tier + '.');
 
   if (tier === 'Developing') {
-    D.push('DEVELOPING/BEGINNER: load by FEEL to a target rep/RPE (around RPE 6-7), NOT by max percentage. Cap ALL work at ~80% of the (estimated) max. NO maximal or near-maximal singles at all. Use 2-3 reps at moderate loads for technique. Slow, conservative progression.');
+    D.push('DEVELOPING/BEGINNER: load by FEEL to a target rep/RPE (around RPE 6-7), NOT by max percentage. HARD CAP every exercise INCLUDING the snatch and clean & jerk at 80% of the (estimated) max - the classic lifts must NOT exceed 80% for this athlete. NO maximal or near-maximal singles at all. Use 2-3 reps at moderate loads for technique. Slow, conservative progression.');
   } else if (!tested) {
     D.push('MAXES UNPROVEN/ESTIMATED: treat as inflated. Work 5-10% under, cap normal work ~85%, no true maxes until a clean make confirms them.');
   }
 
-  if (tier === 'Provincial') D.push('INTENSITY: classic lifts top ~88-92% on the heavy day; other days 75-87%. About 2 heavy exposures per week.');
+  if (tier === 'Provincial') D.push('INTENSITY: classic lifts top out at 88-92% on the heavy day and MUST NOT exceed 92% in a normal (non-peak) week; other days 75-87%. About 2 heavy exposures per week.');
   if (tier === 'National+') D.push('INTENSITY (National+): classic lifts live 85-95% in normal weeks; 4-5 heavy exposures per week; on planned heavy days work up toward a daily max (do NOT cap at a fixed percentage). This athlete must train HEAVIER than a provincial lifter, not lighter.');
 
   if (tier !== 'Developing' && fsq && cleanRef) {
@@ -247,8 +247,8 @@ function buildDirectives(p) {
   });
   if (corr.length) D.push('INCLUDE THESE CORRECTIVES this week to target the stated gaps (' + gaps.join(', ') + '): ' + Array.from(new Set(corr)).join(', ') + '.');
 
-  const nEx = dur >= 90 ? '5' : dur >= 75 ? '4-5' : dur >= 60 ? '3-4' : '3';
-  D.push('SESSION SHAPE: every training day MUST include ' + nEx + ' exercises (main classic lift + a pull or variation + a squat + 1-2 targeted accessories/correctives), filling the ~' + dur + ' min. A heavy classic lift is ~30-40 min and a squat ~15-20 min. Do NOT output a thin 2-exercise session.');
+  const nEx = dur >= 90 ? 5 : dur >= 60 ? 4 : 3;
+  D.push('SESSION SHAPE: every training day MUST include AT LEAST ' + nEx + ' exercises (a day with fewer is INVALID): main classic lift + a pull or variation + a squat + 1-2 targeted accessories/correctives, filling the ~' + dur + ' min. A heavy classic lift is ~30-40 min and a squat ~15-20 min.');
 
   return D.length ? ('## COACHING DIRECTIVES FOR THIS ATHLETE (COMPUTED, NON-NEGOTIABLE - apply EXACTLY; these OVERRIDE any conflicting bible default):\n- ' + D.join('\n- ')) : '';
 }
