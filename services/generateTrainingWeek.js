@@ -5,7 +5,7 @@
 
 const User = require('../models/User');
 const WeeklyTraining = require('../models/WeeklyTraining');
-const { generateTrainingResponse } = require('./openaiService');
+const { generateTrainingResponse, resolveTier, tierCeiling } = require('./openaiService');
 const { normalizeWorkoutTabData } = require('../utils/workoutTabSchema');
 const { mapResponseToDays, getWeekStart, getNextWeekStart } = require('./trainingWeekService');
 
@@ -24,6 +24,36 @@ function canGenerateWeek(profile) {
  * @param {object} options - { weekStart?: Date, isFirstWeek?: boolean }
  * @returns {Promise<object>} Saved WeeklyTraining document
  */
+
+/**
+ * Deterministic guardrail: no competition-lift set may exceed the athlete's
+ * tier intensity ceiling (Developing 80%, Provincial 92%, National+ 95%).
+ * Pulls, squats and presses are exempt. Weight is scaled to match.
+ */
+function clampClassicLiftIntensity(days, ceiling) {
+  const isClassic = (name) => {
+    const n = String(name || '').toLowerCase();
+    if (n.includes('pull') || n.includes('squat') || n.includes('press')) return false;
+    return /snatch|clean|jerk/.test(n);
+  };
+  Object.values(days || {}).forEach((day) => {
+    if (!day || !Array.isArray(day.exercises)) return;
+    day.exercises.forEach((ex) => {
+      if (!isClassic(ex.exercise_name)) return;
+      (ex.sets || []).forEach((set) => {
+        const pct = set.rpm_percent;
+        if (typeof pct === 'number' && pct > ceiling) {
+          if (typeof set.weight === 'number' && set.weight > 0) {
+            set.weight = Math.round((set.weight * ceiling) / pct);
+          }
+          set.rpm_percent = ceiling;
+        }
+      });
+    });
+  });
+  return days;
+}
+
 async function generateAndSaveWeek(user, options = {}) {
   const profile = user.profile;
   if (!canGenerateWeek(profile)) {
@@ -52,6 +82,7 @@ async function generateAndSaveWeek(user, options = {}) {
 
   const normalized = normalizeWorkoutTabData(data);
   const days = mapResponseToDays(normalized, profile);
+  clampClassicLiftIntensity(days, tierCeiling(resolveTier(profile)));
 
   const av = profile.availability || {};
   const doc = await WeeklyTraining.create({
