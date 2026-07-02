@@ -25,6 +25,64 @@ function canGenerateWeek(profile) {
  * @returns {Promise<object>} Saved WeeklyTraining document
  */
 
+/** Athlete maxes for deterministic weight computation. */
+function getMaxes(profile) {
+  const ss = (profile && profile.strength_stats) || {};
+  const gv = (o) => (o && typeof o.value === 'number' && o.value > 0 ? o.value : null);
+  return {
+    snatch: gv(ss.classic && ss.classic.snatch),
+    cj: gv(ss.classic && ss.classic.clean_jerk),
+    clean: gv(ss.variation && ss.variation.clean),
+    backSquat: gv(ss.squat && ss.squat.back_squat),
+    frontSquat: gv(ss.squat && ss.squat.front_squat),
+  };
+}
+
+/**
+ * Deterministic weight fix: LLMs mislabel weights. For the competition lifts,
+ * pulls and squats (where the base max is known) recompute weight = % x max,
+ * rounded to 2.5 kg. Variations/jerk work are left to the model.
+ */
+function recomputeMainWeights(days, m) {
+  const round = (w) => Math.round(w / 2.5) * 2.5;
+  const baseFor = (name) => {
+    const n = String(name || '').toLowerCase();
+    if (n.includes('pull')) {
+      if (n.includes('snatch')) return m.snatch;
+      if (n.includes('clean')) return m.clean || m.cj;
+      return null;
+    }
+    if (n.includes('squat') && !n.includes('overhead')) return n.includes('front') ? m.frontSquat : m.backSquat;
+    if (n === 'snatch') return m.snatch;
+    if (n.replace(/&/g, 'and').includes('clean and jerk')) return m.cj;
+    if (n === 'clean') return m.clean || m.cj;
+    return null;
+  };
+  Object.values(days || {}).forEach((day) => {
+    if (!day || !Array.isArray(day.exercises)) return;
+    day.exercises.forEach((ex) => {
+      const base = baseFor(ex.exercise_name);
+      if (!base) return;
+      (ex.sets || []).forEach((s) => {
+        if (typeof s.rpm_percent === 'number' && s.rpm_percent > 0) s.weight = round((s.rpm_percent / 100) * base);
+      });
+    });
+  });
+}
+
+/** No more than one squat-pattern movement per training day. */
+function dedupeSquats(days) {
+  Object.values(days || {}).forEach((day) => {
+    if (!day || !Array.isArray(day.exercises)) return;
+    let seen = false;
+    day.exercises = day.exercises.filter((ex) => {
+      const isSquat = String(ex.exercise_name || '').toLowerCase().includes('squat');
+      if (isSquat) { if (seen) return false; seen = true; }
+      return true;
+    });
+  });
+}
+
 /**
  * Deterministic guardrail: no competition-lift set may exceed the athlete's
  * tier intensity ceiling (Developing 80%, Provincial 92%, National+ 95%).
@@ -83,6 +141,8 @@ async function generateAndSaveWeek(user, options = {}) {
   const normalized = normalizeWorkoutTabData(data);
   const days = mapResponseToDays(normalized, profile);
   clampClassicLiftIntensity(days, tierCeiling(resolveTier(profile)));
+  recomputeMainWeights(days, getMaxes(profile));
+  dedupeSquats(days);
 
   const av = profile.availability || {};
   const doc = await WeeklyTraining.create({
