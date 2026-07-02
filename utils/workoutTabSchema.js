@@ -79,6 +79,8 @@ const DEFAULT_WORKOUT_TAB_DATA = {
  * @param {object} data - Parsed AI response
  * @returns {WorkoutTabData}
  */
+const VALID_INTENTS = ['Technical Consistency', 'Speed & Power', 'Strength Under Load', 'Confidence & Exposure'];
+
 function normalizeSet(s, index) {
   if (!s || typeof s !== 'object') return null;
   const setNum = typeof s.set_number === 'number' ? s.set_number : (index + 1);
@@ -91,7 +93,7 @@ function normalizeSet(s, index) {
     rpm_percent: typeof s.rpm_percent === 'number' ? s.rpm_percent : null,
     coach_prescription: typeof s.coach_prescription === 'string' ? s.coach_prescription : '',
     key_cues: Array.isArray(s.key_cues) ? s.key_cues.filter((c) => typeof c === 'string') : [],
-    intent: typeof s.intent === 'string' ? s.intent : '',
+    intent: VALID_INTENTS.includes(s.intent) ? s.intent : 'Technical Consistency',
     context: typeof s.context === 'string' ? s.context : '',
   };
 }
