@@ -185,10 +185,79 @@ function formatProfileForPrompt(profile) {
  * @returns {Promise<{ content: string, usage?: object }>}
  */
 /**
+ * Resolve the athlete's key coaching decisions deterministically (tier, beginner
+ * handling, strength-sufficiency, correctives, session size) and return them as
+ * explicit non-negotiable directives. This spoon-feeds the conditional logic the
+ * model tends to skip when applying the whole bible.
+ */
+function buildDirectives(p) {
+  if (!p || typeof p !== 'object') return '';
+  const gv = (o) => (o && typeof o.value === 'number' && o.value > 0 ? o.value : null);
+  const ss = p.strength_stats || {};
+  const cj = gv(ss.classic && ss.classic.clean_jerk);
+  const clean = gv(ss.variation && ss.variation.clean);
+  const fsq = gv(ss.squat && ss.squat.front_squat);
+  const bsq = gv(ss.squat && ss.squat.back_squat);
+  const cleanRef = Math.max(clean || 0, cj || 0) || null;
+  const ty = typeof p.experience_years === 'number' ? p.experience_years : null;
+  const tested = p.strength_accuracy === 'Tested';
+  const injuryClean = !(p.considerations && p.considerations.has_limitations);
+  const dur = (p.availability && p.availability.session_duration) || 60;
+  const D = [];
+
+  let tier = 'Provincial';
+  if ((ty != null && ty < 2) || !tested) tier = 'Developing';
+  else if (ty != null && ty >= 5 && tested && injuryClean) tier = 'National+';
+  else if (ty != null && ty >= 3 && tested) tier = 'Provincial';
+  else tier = 'Developing';
+  D.push('ATHLETE TIER: ' + tier + '.');
+
+  if (tier === 'Developing') {
+    D.push('DEVELOPING/BEGINNER: load by FEEL to a target rep/RPE (around RPE 6-7), NOT by max percentage. Cap ALL work at ~80% of the (estimated) max. NO maximal or near-maximal singles at all. Use 2-3 reps at moderate loads for technique. Slow, conservative progression.');
+  } else if (!tested) {
+    D.push('MAXES UNPROVEN/ESTIMATED: treat as inflated. Work 5-10% under, cap normal work ~85%, no true maxes until a clean make confirms them.');
+  }
+
+  if (tier === 'Provincial') D.push('INTENSITY: classic lifts top ~88-92% on the heavy day; other days 75-87%. About 2 heavy exposures per week.');
+  if (tier === 'National+') D.push('INTENSITY (National+): classic lifts live 85-95% in normal weeks; 4-5 heavy exposures per week; on planned heavy days work up toward a daily max (do NOT cap at a fixed percentage). This athlete must train HEAVIER than a provincial lifter, not lighter.');
+
+  if (tier !== 'Developing' && fsq && cleanRef) {
+    const r = Math.round((fsq / cleanRef) * 100);
+    if (r >= 125) {
+      D.push('STRENGTH-SUFFICIENT (front squat ' + r + '% of clean): do NOT pile on squats. Squat at most 2x/week at moderate load. REDIRECT the freed volume into the competition lifts, close variations, and SPEED / rate-of-force work: speed pulls, power snatch and power clean, tall and no-feet variants.');
+    } else if (bsq && Math.round((fsq / bsq) * 100) < 82) {
+      D.push('CLEAN-RECOVERY LIMITER (front squat lags back squat): prioritise FRONT SQUATS and PAUSE FRONT SQUATS; add a clean + front-squat complex.');
+    }
+  }
+
+  const gapMap = {
+    overhead: ['overhead squat', 'snatch balance', 'drop snatch'],
+    receiving: ['tall/hang snatch', 'no-feet snatch', 'drop snatch'],
+    squat: ['pause squats', 'tempo squats'],
+    leg: ['pause squats', 'tempo squats'],
+    speed: ['speed pulls', 'power snatch/clean', 'tall snatch'],
+    pulling: ['pause snatch/clean at knee', 'lifts from blocks', 'RDLs'],
+    positioning: ['pause snatch/clean at knee', 'lifts from blocks'],
+  };
+  const gaps = Array.isArray(p.performance_gaps) ? p.performance_gaps : [];
+  const corr = [];
+  gaps.forEach((g) => {
+    const k = String(g).toLowerCase();
+    Object.keys(gapMap).forEach((key) => { if (k.includes(key)) corr.push.apply(corr, gapMap[key]); });
+  });
+  if (corr.length) D.push('INCLUDE THESE CORRECTIVES this week to target the stated gaps (' + gaps.join(', ') + '): ' + Array.from(new Set(corr)).join(', ') + '.');
+
+  const nEx = dur >= 90 ? '5' : dur >= 75 ? '4-5' : dur >= 60 ? '3-4' : '3';
+  D.push('SESSION SHAPE: every training day MUST include ' + nEx + ' exercises (main classic lift + a pull or variation + a squat + 1-2 targeted accessories/correctives), filling the ~' + dur + ' min. A heavy classic lift is ~30-40 min and a squat ~15-20 min. Do NOT output a thin 2-exercise session.');
+
+  return D.length ? ('## COACHING DIRECTIVES FOR THIS ATHLETE (COMPUTED, NON-NEGOTIABLE - apply EXACTLY; these OVERRIDE any conflicting bible default):\n- ' + D.join('\n- ')) : '';
+}
+
+/**
  * Build the workout-generation system prompt. The AI follows the injected Oly
  * Training Bible; this prompt only orchestrates the process and locks the JSON shape.
  */
-function buildWorkoutSystemPrompt(profileSummary, docContext) {
+function buildWorkoutSystemPrompt(profileSummary, docContext, directives) {
   return `You are the Oly AI weightlifting coach. Your complete, authoritative programming manual — the OLY TRAINING BIBLE — is provided below. FOLLOW IT EXACTLY; it overrides any generic training assumption. Where the athlete's data is missing, follow the bible's defaults and graceful-degradation rules — never invent your own method.
 
 # THE OLY TRAINING BIBLE (your source of truth)
@@ -197,7 +266,9 @@ ${docContext || '(Training bible not loaded.)'}
 # THIS ATHLETE
 ${profileSummary}
 
-# YOUR TASK — build the training week by applying the bible IN ORDER:
+${directives}
+
+# YOUR TASK — build the training week. FIRST obey the COACHING DIRECTIVES above: they are the resolved, non-negotiable decisions for THIS athlete and OVERRIDE any conflicting default. Then apply the bible IN ORDER:
 1. Trust & tier: assess max reliability (Sec 11) and set the athlete tier (Sec 14A gates: experience + confirmed maxes + injury-clean + ratios). Unlock National+ ONLY if all gates pass; otherwise use the conservative default.
 2. Limiter: diagnose from the ratios (5D), performance gaps, and any logged misses (Sec 5).
 3. Timeline: place the week in its phase (Sec 6) — a competitor counts down from the meet date; a non-competitor runs the repeating cycle.
@@ -231,10 +302,11 @@ async function generateTrainingResponse({ profile, request, feedback, documentCo
       : await getFullDocumentText(); // the whole Oly Training Bible, read in order
 
   const profileSummary = formatProfileForPrompt(profile);
+  const directives = buildDirectives(profile);
   const isWorkoutTab = responseFormat === 'workout_tab';
 
   const systemPrompt = isWorkoutTab
-    ? buildWorkoutSystemPrompt(profileSummary, docContext)
+    ? buildWorkoutSystemPrompt(profileSummary, docContext, directives)
 
     : `You are the Oly App Training Logic agent. You must use BOTH sources below for every response:
 
@@ -418,6 +490,7 @@ Focus on safety and recovery. Be conservative with adjustments. Return only vali
 module.exports = {
   formatProfileForPrompt,
   buildWorkoutSystemPrompt,
+  buildDirectives,
   generateTrainingResponse,
   generateDailyAdjustment,
 };

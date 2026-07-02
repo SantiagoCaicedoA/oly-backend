@@ -222,7 +222,7 @@ class ProfileController {
             message = 'Profile updated and training plan generated successfully.';
           } catch (err) {
             console.error('Generate first week failed', err);
-            message = 'Profile updated, but there was an issue generating your training plan. We will retry shortly. [debug: ' + (err && err.message ? err.message : String(err)) + ']';
+            message = 'Profile updated, but there was an issue generating your training plan. We will retry shortly.';
           }
         }
       }
