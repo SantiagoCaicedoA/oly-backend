@@ -184,6 +184,19 @@ function formatProfileForPrompt(profile) {
  * @param {string} [options.responseFormat] - 'workout_tab' to get structured JSON for app screens
  * @returns {Promise<{ content: string, usage?: object }>}
  */
+function resolveTier(p) {
+  const ty = p && typeof p.experience_years === 'number' ? p.experience_years : null;
+  const tested = p && p.strength_accuracy === 'Tested';
+  const injuryClean = !(p && p.considerations && p.considerations.has_limitations);
+  if ((ty != null && ty < 2) || !tested) return 'Developing';
+  if (ty != null && ty >= 5 && tested && injuryClean) return 'National+';
+  if (ty != null && ty >= 3 && tested) return 'Provincial';
+  return 'Developing';
+}
+function tierCeiling(tier) {
+  return tier === 'Developing' ? 80 : tier === 'National+' ? 95 : 92;
+}
+
 /**
  * Resolve the athlete's key coaching decisions deterministically (tier, beginner
  * handling, strength-sufficiency, correctives, session size) and return them as
@@ -205,11 +218,7 @@ function buildDirectives(p) {
   const dur = (p.availability && p.availability.session_duration) || 60;
   const D = [];
 
-  let tier = 'Provincial';
-  if ((ty != null && ty < 2) || !tested) tier = 'Developing';
-  else if (ty != null && ty >= 5 && tested && injuryClean) tier = 'National+';
-  else if (ty != null && ty >= 3 && tested) tier = 'Provincial';
-  else tier = 'Developing';
+  const tier = resolveTier(p);
   D.push('ATHLETE TIER: ' + tier + '.');
 
   if (tier === 'Developing') {
@@ -491,6 +500,8 @@ module.exports = {
   formatProfileForPrompt,
   buildWorkoutSystemPrompt,
   buildDirectives,
+  resolveTier,
+  tierCeiling,
   generateTrainingResponse,
   generateDailyAdjustment,
 };
