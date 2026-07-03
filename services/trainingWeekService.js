@@ -116,8 +116,8 @@ function mapResponseToDays(workoutData, profile) {
     const validExercises = td.exercises.filter(isExercise);
     days[dayName] = {
       type: 'training',
-      coach_note: coachNote,
-      key_cues: keyCues,
+      coach_note: (typeof td.coach_note === 'string' && td.coach_note.trim()) ? td.coach_note : coachNote,
+      key_cues: (Array.isArray(td.key_cues) && td.key_cues.length) ? td.key_cues : keyCues,
       daily_check_in: {
         sleep_quality: workoutData.daily_check_in?.sleep_quality ?? 5,
         stress_level: workoutData.daily_check_in?.stress_level ?? 5,
