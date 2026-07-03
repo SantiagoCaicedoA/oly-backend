@@ -380,6 +380,103 @@ Respond only with training logic outputs (blocks, sessions, feedback-based adjus
 }
 
 /**
+ * Dedicated coach-note pass. After the week is built + post-processed, this
+ * re-writes each training day's coach_note + key_cues using the COACH NOTE BIBLE
+ * as the single source of truth (voice, the 4-beat teaching structure, the
+ * phase-teaching library, focus-as-intention-never-a-diagnosis, lift-specific
+ * cues). It runs as a cheap, focused second call so the heavy week-generation
+ * isn't overloaded and never drops the teaching beats.
+ *
+ * @param {object} profile - User.profile
+ * @param {object} days - days map from mapResponseToDays ({ monday: {...}, ... })
+ * @returns {Promise<object|null>} { monday: { coach_note, key_cues }, ... } or null on failure
+ */
+async function generateCoachNotes(profile, days) {
+  if (!OPENAI_API_KEY || !openai) return null;
+
+  const bible = await getFullDocumentText('data/coach-note-bible.md');
+  if (!bible) return null;
+
+  const trainingDays = Object.entries(days || {}).filter(
+    ([, d]) => d && d.type === 'training' && Array.isArray(d.exercises) && d.exercises.length
+  );
+  if (!trainingDays.length) return null;
+
+  // Compact per-day summary so the model knows each session's shape (which lift,
+  // how heavy) without re-sending the full workout JSON.
+  const daySummaries = trainingDays
+    .map(([name, d]) => {
+      const exs = (d.exercises || []).map((ex) => {
+        const top = (ex.sets || []).reduce(
+          (m, s) => (typeof s.rpm_percent === 'number' && s.rpm_percent > (m || 0) ? s.rpm_percent : m),
+          null
+        );
+        return top ? `${ex.exercise_name} (top ${top}%)` : ex.exercise_name;
+      });
+      return `- ${name}: ${exs.join('; ')}`;
+    })
+    .join('\n');
+
+  const profileSummary = formatProfileForPrompt(profile);
+
+  const systemPrompt = `You are the Oly AI weightlifting coach writing the short "coach note" shown to the athlete before each training session. Your ONLY guide for HOW to write these is the COACH NOTE BIBLE below — follow it EXACTLY: the mandatory 4-beat structure, the phase-teaching library, focus-stated-as-an-intention (NEVER a diagnosis of a fault you can't see), and the lift-specific cue rules.
+
+# THE COACH NOTE BIBLE (your source of truth for what to say)
+${bible}
+
+# THIS ATHLETE
+${profileSummary}
+
+# THIS WEEK'S SESSIONS (already programmed — do NOT change them; only write the note + cues for each)
+${daySummaries}
+
+# TASK
+For EACH training day listed above, write:
+- coach_note: 3-4 short sentences, second person, greet by name once, in the bible's mandatory ORDER (1 where you are in the block: phase + timeline; 2 why this session exists: teach what the phase is building; 3 today's ONE focus as an intention tied to what the athlete told us they're working on; 4 a readiness nudge). DISTINCT across days. Never claim to know why a lift missed or name a fault you can't see.
+- key_cues: exactly 3 short technical cues for THAT day's main lift, from the bible's cue library. Never generic filler.
+
+# OUTPUT — JSON ONLY (no markdown, no prose), this EXACT shape:
+{ "notes": [ { "day": "monday", "coach_note": "string", "key_cues": ["string", "string", "string"] } ] }
+Use the SAME day names as the sessions above (lowercase weekday). Output ONLY the JSON object.`;
+
+  const response = await openai.chat.completions.create({
+    model: DEFAULT_MODEL,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: 'Write the coach notes and cues for this week, following the Coach Note Bible exactly.' },
+    ],
+    max_tokens: 2000,
+    temperature: 0.5,
+    response_format: { type: 'json_object' },
+  });
+
+  const content = response.choices?.[0]?.message?.content?.trim();
+  if (!content) return null;
+
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch (e) {
+    console.warn('coach-note pass: JSON parse failed -', e && e.message);
+    return null;
+  }
+
+  const notes = Array.isArray(parsed && parsed.notes) ? parsed.notes : [];
+  const validDays = new Set(trainingDays.map(([name]) => name));
+  const out = {};
+  notes.forEach((n) => {
+    if (!n || typeof n !== 'object') return;
+    const day = String(n.day || '').toLowerCase().trim();
+    if (!validDays.has(day)) return;
+    out[day] = {
+      coach_note: typeof n.coach_note === 'string' ? n.coach_note.trim() : '',
+      key_cues: Array.isArray(n.key_cues) ? n.key_cues.filter((c) => typeof c === 'string' && c.trim()).slice(0, 3) : [],
+    };
+  });
+  return Object.keys(out).length ? out : null;
+}
+
+/**
  * Generate AI adjustment for a specific day based on abnormal check-in data
  */
 async function generateDailyAdjustment(day, checkIn, abnormalities, currentDayData) {
@@ -506,5 +603,6 @@ module.exports = {
   resolveTier,
   tierCeiling,
   generateTrainingResponse,
+  generateCoachNotes,
   generateDailyAdjustment,
 };
