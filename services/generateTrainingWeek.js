@@ -5,7 +5,7 @@
 
 const User = require('../models/User');
 const WeeklyTraining = require('../models/WeeklyTraining');
-const { generateTrainingResponse, resolveTier, tierCeiling } = require('./openaiService');
+const { generateTrainingResponse, generateCoachNotes, resolveTier, tierCeiling } = require('./openaiService');
 const { normalizeWorkoutTabData } = require('../utils/workoutTabSchema');
 const { mapResponseToDays, getWeekStart, getNextWeekStart } = require('./trainingWeekService');
 
@@ -143,6 +143,24 @@ async function generateAndSaveWeek(user, options = {}) {
   clampClassicLiftIntensity(days, tierCeiling(resolveTier(profile)));
   recomputeMainWeights(days, getMaxes(profile));
   dedupeSquats(days);
+
+  // Dedicated coach-note pass: rewrite each day's note + cues from the Coach Note
+  // Bible AFTER the program is finalized. Runs on the deterministic, corrected
+  // sessions so the notes match what the athlete actually sees. Best-effort — if
+  // it fails, the inline notes from the main generation remain as the fallback.
+  try {
+    const notes = await generateCoachNotes(profile, days);
+    if (notes) {
+      Object.keys(notes).forEach((dayName) => {
+        const d = days[dayName];
+        if (!d || d.type !== 'training') return;
+        if (notes[dayName].coach_note) d.coach_note = notes[dayName].coach_note;
+        if (Array.isArray(notes[dayName].key_cues) && notes[dayName].key_cues.length) d.key_cues = notes[dayName].key_cues;
+      });
+    }
+  } catch (e) {
+    console.error('coach-note pass failed (keeping inline notes):', e && e.message);
+  }
 
   const av = profile.availability || {};
   const doc = await WeeklyTraining.create({
