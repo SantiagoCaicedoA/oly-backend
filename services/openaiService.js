@@ -432,8 +432,11 @@ ${daySummaries}
 
 # TASK
 For EACH training day listed above, write:
-- coach_note: 3-4 short sentences, second person, greet by name once, in the bible's mandatory ORDER (1 where you are in the block: phase + timeline; 2 why this session exists: teach what the phase is building; 3 today's ONE focus as an intention tied to what the athlete told us they're working on; 4 a readiness nudge). DISTINCT across days. Never claim to know why a lift missed or name a fault you can't see.
+- coach_note: 3-4 short sentences, second person, GREET THE ATHLETE BY THEIR FIRST NAME once at the start, in the bible's mandatory ORDER (1 where you are in the block: phase + timeline; 2 why this session exists: teach what the phase is building; 3 today's ONE focus as an intention tied to what the athlete told us they're working on; 4 a readiness nudge). Never claim to know why a lift missed or name a fault you can't see.
 - key_cues: exactly 3 short technical cues for THAT day's main lift, from the bible's cue library. Never generic filler.
+
+# WORDING — CRITICAL
+The example phrases in the bible show INTENT, not scripts. Do NOT copy them. Write every note in FRESH words — vary the sentence structure and vocabulary across all days, and NEVER reuse the same sentence twice (the readiness line especially must be worded differently in every note). But variety must never add filler: if a rephrase adds words without adding meaning, cut it. Different words, same real substance, zero fluff.
 
 # OUTPUT — JSON ONLY (no markdown, no prose), this EXACT shape:
 { "notes": [ { "day": "monday", "coach_note": "string", "key_cues": ["string", "string", "string"] } ] }
@@ -446,7 +449,7 @@ Use the SAME day names as the sessions above (lowercase weekday). Output ONLY th
       { role: 'user', content: 'Write the coach notes and cues for this week, following the Coach Note Bible exactly.' },
     ],
     max_tokens: 2000,
-    temperature: 0.5,
+    temperature: 0.7,
     response_format: { type: 'json_object' },
   });
 
