@@ -124,6 +124,8 @@ function normalizeTrainingDays(trainingDays) {
   return trainingDays.map((d) => ({
     day: typeof d.day === 'number' ? d.day : 0,
     day_label: typeof d.day_label === 'string' ? d.day_label : '',
+    coach_note: typeof d.coach_note === 'string' ? d.coach_note : '',
+    key_cues: Array.isArray(d.key_cues) ? d.key_cues.filter((c) => typeof c === 'string') : [],
     exercises: Array.isArray(d.exercises) ? d.exercises.filter(isExerciseObject).map(normalizeExercise) : [],
   }));
 }

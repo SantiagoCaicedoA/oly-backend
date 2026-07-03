@@ -24,6 +24,8 @@ const WORKOUT_TAB_JSON_SCHEMA = `{
     {
       "day": 1,
       "day_label": "string e.g. Monday",
+      "coach_note": "a DISTINCT personalized message for THIS specific day (see field rules)",
+      "key_cues": ["3 short cues specific to this day's main lift"],
       "exercises": [
           {
             "exercise_name": "string",
@@ -293,6 +295,8 @@ Field rules — map the bible onto these fields:
 - Each day: multiple exercises per the session shape (4B) within the time budget (4G).
 - Each set: set_number; weight = round(% x TRUE max) in the athlete's unit — always a positive real load, NEVER 0 or a flat fallback; reps per the bible (classic lifts 1-2; squats/pulls by phase); rpm_percent = THE ACTUAL % OF TRUE MAX USED FOR THIS SET (e.g. a set at 82% -> rpm_percent: 82 — never a constant, never null); coach_prescription (cue for this set); key_cues (array); intent (EXACTLY one of: Technical Consistency, Speed & Power, Strength Under Load, Confidence & Exposure); context ("Set X of Y", or "Top Set - Max Effort" / "Back-off Set - Recovery" for special sets — never put context text into intent).
 - coach_note on each exercise MUST state WHY it is in the program (its intention / the fault it fixes) — the no-filler law (5A).
+- CRITICAL — DAY-LEVEL coach_note: write it as a REAL COACH teaching the athlete before THIS session, second person ("you"), never a third-person report. Greet them by name once. In 3-4 short sentences, follow this ORDER: (1) WHERE THEY ARE — name the current training phase and timeline (e.g. "you're in your strength block, 12 weeks out"); (2) WHY THIS SESSION EXISTS — teach what this phase is building and why now, so they understand the logic (e.g. "we're building the leg and pulling strength that becomes bigger lifts closer to the meet, so we're not chasing max snatches yet"); (3) TODAY'S ONE FOCUS — their specific limiter in today's context, never generic; (4) a quick readiness nudge (how to run it fresh vs beat up). Each day's note must be DISTINCT across days. Do NOT describe the program in the abstract ("this week is designed to...") — talk TO them and teach the reasoning.
+- CRITICAL — DAY-LEVEL key_cues: exactly 3 SHORT technical cues specific to THAT day's main lift AND the athlete's fault (e.g. a forward-missing snatcher on snatch day: "Stay over the bar", "Finish the pull", "Fast elbows"). NEVER generic filler like "focus on technique", "maintain form", or "control the weight".
 - daily_check_in: sleep_quality, stress_level, mental_readiness as realistic 1-10 numbers. todays_training: same structure as training_days[0].exercises. suggested_exercises: per the schema.
 
 Output ONLY the JSON object.`;
