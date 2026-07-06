@@ -214,24 +214,33 @@ class ProfileController {
         if (typeof n === 'number') message = `Profile updated. Your next training week will have ${n} session${n !== 1 ? 's' : ''}.`;
       }
 
+      let willGenerate = false;
       if (canGenerateWeek(req.user.profile)) {
         const existing = await WeeklyTraining.findOne({ user: req.user._id });
-        if (!existing) {
-          try {
-            await generateFirstWeek(req.user);
-            message = 'Profile updated and training plan generated successfully.';
-          } catch (err) {
-            console.error('Generate first week failed', err);
-            message = 'Profile updated, but there was an issue generating your training plan. We will retry shortly.';
-          }
-        }
+        if (!existing) willGenerate = true;
       }
 
+      // Respond IMMEDIATELY — never hold the request open for the ~1-minute AI
+      // generation. Long requests get cut by the load balancer's idle timeout,
+      // which surfaced to the athlete as a false "Failed to create profile" on the
+      // first Finish (the week was actually generating in the background, so the
+      // retry "worked"). Instead we return now with a `generating` flag; the client
+      // shows a "building your plan" state and polls GET /api/training/week.
       res.status(200).json({
         success: true,
         data: formatUserResponse(req.user),
-        message,
+        message: willGenerate ? 'Profile updated. Building your first training week…' : message,
+        generating: willGenerate,
       });
+
+      // Fire-and-forget the generation AFTER responding. Errors are logged; the
+      // client's poll will simply keep waiting and can surface a retry if needed.
+      if (willGenerate) {
+        const userForGen = req.user;
+        Promise.resolve()
+          .then(() => generateFirstWeek(userForGen))
+          .catch((err) => console.error('Generate first week failed (background)', err));
+      }
     } catch (error) {
       next(error);
     }
