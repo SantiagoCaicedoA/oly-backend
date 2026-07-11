@@ -44,6 +44,7 @@ const profileSchema = new Schema(
     considerations: {
       has_limitations: Boolean,
       affected_areas: [String],
+      status: { type: String, enum: ['Acute', 'Managed', 'Healed'] },
       impact_level: { type: String, enum: ['Mild', 'Moderate', 'High'] },
       triggers: [String],
     },
@@ -58,6 +59,8 @@ const profileSchema = new Schema(
       enum: ['High Intensity', 'Balanced', 'Higher Volume', 'Adaptive'],
     },
     performance_gaps: [String],
+    // Baseline recovery capacity — individualizes volume (Screen 4)
+    recovery_profile: { type: String, enum: ['fast', 'average', 'slow'] },
 
     // Where the athlete is starting from (Screen 6)
     training_phase: {

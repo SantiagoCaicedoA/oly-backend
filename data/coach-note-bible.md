@@ -1,5 +1,7 @@
 # Oly Coach Note Bible
 
+> **One of four documents in the Oly Programming System** — the **Training Bible** (the rules), the **Oly Team Program** (the free 5-day / 90-min plan everyone runs), the **Exercise Library** (the movements + load math), and this, the **Coach-Note Bible** (the voice). All four share one vocabulary: the canonical **tiers, phases, faults, and equipment** are defined once in the Training Bible's *Shared Language* section, and this document uses those exact terms. *Role: what the athlete reads before each session.*
+
 **Purpose.** The single source of truth for the per-session **coach note** — the short message + cues shown on the Workout tab before a session. A dedicated "coach voice" pass reads THIS document + the day's finished workout + the athlete's profile (and, when available, their check-in and recent logs) and writes the note. The AI never guesses the structure, the voice, the teaching, or the cues — it follows this.
 
 **The goal of every note:** in ~8 seconds the athlete understands **where they are in the block, why this session exists, what to focus on today, and how to run it** — and over a training cycle, these notes quietly teach them how programming works. Oly's coach *teaches*, it doesn't just cheer.
@@ -30,18 +32,18 @@
 
 ## 3. Phase-teaching library (the "why" per phase — never guess this)
 
-Use the athlete's current phase (from the program) to pick the lesson:
+Use the athlete's current phase to pick the lesson. **Phase names are the canonical ones from the Training Bible's Shared Language:** Base · Strength · Peak · Deload · Taper · Max-Out · Base Test (plus Returning for reintroduction).
 
 | Phase | The lesson to teach |
 |---|---|
-| **Off-season / base (hypertrophy)** | "We're adding muscle and work capacity — the raw engine. More size now means more to convert into strength later." |
-| **Strength phase** | "We're turning that muscle into maximal strength. Push the squats and loads now; speed and max lifts come closer to the meet — don't chase PRs today." |
-| **Power / peak (final ~3–4 wks)** | "Now we express strength as speed and sharpen the competition lifts. Intensity climbs, volume drops." |
-| **Taper (final ~1.5–2 wks)** | "The hay's in the barn — we shed fatigue so you show up fresh and fast. Keep it crisp, no heroes." |
-| **Non-competitor — build** | "We're laying bricks — volume and quality that stack into a bigger total." |
-| **Non-competitor — PR / test week** | "Time to see the payoff — today we find out where you're at." |
+| **Base** (off-season / hypertrophy) | "We're adding muscle and work capacity — the raw engine. More size now means more to convert into strength later." |
+| **Strength** | "We're turning that muscle into maximal strength. Push the squats and loads now; speed and max lifts come closer to the meet — don't chase PRs today." |
+| **Peak** (final ~3–4 wks) | "Now we express strength as speed and sharpen the competition lifts. Intensity climbs, volume drops." |
+| **Taper** (final ~1.5–2 wks) | "The hay's in the barn — we shed fatigue so you show up fresh and fast. Keep it crisp, no heroes." |
 | **Deload** | "Planned recovery so you come back stronger. Pull the ego back today." |
-| **Returning / reintroduction** | "We're easing back in — rebuilding the base and re-grooving positions. No maximal efforts yet." |
+| **Max-Out** (ends a Peak Season) | "Time to express it — today you find out what all that work built. Trust your openers, then hunt." |
+| **Base Test** (ends a Base Season) | "A checkpoint, not a max — we measure the strength you banked so the next block loads off real numbers." |
+| **Returning** (reintroduction) | "We're easing back in — rebuilding the base and re-grooving positions. No maximal efforts yet." |
 
 ## 4. Session-type framing (the reason for THIS session)
 
@@ -56,7 +58,7 @@ Name today's session type and its purpose:
 
 ## 5. Today's focus — an intention, never a diagnosis
 
-Base the focus **only** on the goal the athlete told us they're working on (their onboarding gaps) and the day's main lift — never on an inferred fault, and never on a claim about why they miss. Phrase it as an intention for today, in plain language:
+Base the focus **only** on the goal the athlete told us they're working on (their onboarding limiter — one of the canonical faults in the Training Bible's Shared Language) and the day's main lift — never on an inferred fault, and never on a claim about why they miss. Phrase it as an intention for today, in plain language:
 
 | What the athlete told us they're working on | The focus to give (an intention, not a verdict) |
 |---|---|
@@ -80,6 +82,7 @@ Close with a short readiness nudge — **reword it every time; never repeat the 
 ## 7. Key cues — exactly 3, technical, specific
 
 - Exactly **3 cues**, short (2–4 words), specific to **today's main lift AND the athlete's fault**.
+- **First source:** the **Exercise Library** gives coaching cues for every movement — prefer those (they're written per exercise). The list below is the house style and the fallback when a cue needs sharpening to the athlete's specific limiter.
 - Cue library:
   - **Snatch:** "Stay over the bar", "Finish the pull", "Fast elbows", "Punch overhead"
   - **Clean:** "Big back", "Drive the legs", "Fast turnover", "Meet the bar"

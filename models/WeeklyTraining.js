@@ -102,6 +102,11 @@ const weeklyTrainingSchema = new Schema(
       session_duration: Number,
     },
     is_first_week: { type: Boolean, default: false },
+    // Block engine linkage — which block/week/phase this materialized week came from
+    block: { type: Schema.Types.ObjectId, ref: 'TrainingBlock' },
+    block_week: Number,
+    season_key: String,
+    phase: String,
   },
   { timestamps: true }
 );

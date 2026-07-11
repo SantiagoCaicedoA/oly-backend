@@ -391,7 +391,7 @@ Respond only with training logic outputs (blocks, sessions, feedback-based adjus
  * @param {object} days - days map from mapResponseToDays ({ monday: {...}, ... })
  * @returns {Promise<object|null>} { monday: { coach_note, key_cues }, ... } or null on failure
  */
-async function generateCoachNotes(profile, days) {
+async function generateCoachNotes(profile, days, planContext = null) {
   if (!OPENAI_API_KEY || !openai) return null;
 
   const bible = await getFullDocumentText('data/coach-note-bible.md');
@@ -419,6 +419,18 @@ async function generateCoachNotes(profile, days) {
 
   const profileSummary = formatProfileForPrompt(profile);
 
+  // Real plan context (from the stored TrainingBlock) so beat 1 ("where you are")
+  // uses true phase/week/timeline instead of guessing from the profile.
+  const endLabel = planContext && planContext.ending === 'base_test' ? 'the Base Test' : 'Max-Out Day';
+  const planBlock = planContext
+    ? `\n# THIS WEEK'S PLACE IN THE BLOCK (use these REAL values for beat 1 — never guess the phase or timeline)\n` +
+      `- Season: ${planContext.season_name}\n` +
+      `- Week ${planContext.week} of ${planContext.weeks_total} — current phase: ${planContext.phase}\n` +
+      `- ${planContext.weeks_to_end} week(s) until ${endLabel}\n` +
+      (planContext.is_special ? `- THIS IS ${planContext.ending === 'base_test' ? 'BASE TEST' : 'MAX-OUT'} WEEK.\n` : '') +
+      (planContext.focus ? `- The week's intention: ${planContext.focus}\n` : '')
+    : '';
+
   const systemPrompt = `You are the Oly AI weightlifting coach writing the short "coach note" shown to the athlete before each training session. Your ONLY guide for HOW to write these is the COACH NOTE BIBLE below — follow it EXACTLY: the mandatory 4-beat structure, the phase-teaching library, focus-stated-as-an-intention (NEVER a diagnosis of a fault you can't see), and the lift-specific cue rules.
 
 # THE COACH NOTE BIBLE (your source of truth for what to say)
@@ -426,13 +438,13 @@ ${bible}
 
 # THIS ATHLETE
 ${profileSummary}
-
+${planBlock}
 # THIS WEEK'S SESSIONS (already programmed — do NOT change them; only write the note + cues for each)
 ${daySummaries}
 
 # TASK
 For EACH training day listed above, write:
-- coach_note: 3-4 short sentences, second person, GREET THE ATHLETE BY THEIR FIRST NAME once at the start, in the bible's mandatory ORDER (1 where you are in the block: phase + timeline; 2 why this session exists: teach what the phase is building; 3 today's ONE focus as an intention tied to what the athlete told us they're working on; 4 a readiness nudge). Never claim to know why a lift missed or name a fault you can't see.
+- coach_note: 3-4 short sentences, second person, GREET THE ATHLETE BY THEIR FIRST NAME once at the start, in the bible's mandatory ORDER (1 WHERE YOU ARE — use the REAL phase + week + weeks-to-${endLabel} from the plan block above, never guessed; 2 why this session exists: teach what the phase is building; 3 today's ONE focus as an intention tied to what the athlete told us they're working on; 4 a readiness nudge). Never claim to know why a lift missed or name a fault you can't see.
 - key_cues: exactly 3 short technical cues for THAT day's main lift, from the bible's cue library. Never generic filler.
 
 # WORDING — CRITICAL
