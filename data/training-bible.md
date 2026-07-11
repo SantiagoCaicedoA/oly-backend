@@ -4,8 +4,44 @@
 
 **How to use it.** For every program, the AI reads the athlete's onboarding data + recent logged performance, then applies the rules below in order. When data is missing, it follows the graceful-degradation defaults (Section 8C). The goal: a sound, personalized, progressive program **every time** — never a random or unsafe week.
 
-> Status: complete (v1.7) — adds a session time-budget and a tier-vs-availability rule. Living document; revise as the coaching philosophy evolves.
+> Status: complete (v1.8) — connected into the four-document Oly Programming System; adds the Shared Language glossary. Living document; revise as the coaching philosophy evolves.
 > Sections: 1 Philosophy · 2 Movement Library · 3 Intensity & Rep Schemes · 4 Volume & Frequency · 5 Exercise Selection & Fault Correction · 6 Periodization · 7 Autoregulation · 8 Safety, Exceptions & Defaults · 9 Loading Reference Tables · 10 Operating Rules, Data & Protocols · 11 Training Max & Data Integrity · 12 Adherence & Real-Life Adjustment · 13 Competition Day · 14 Advanced & National-Level Athletes.
+
+---
+
+## The Oly Programming System (this is one of four connected documents)
+
+Oly's programming runs on **four documents that share one language.** Read them as one system, in this order of authority:
+
+1. **Athlete onboarding** — the *facts* (who we're programming for: maxes + reliability, experience, equipment, limiter, goal/meet date, days, injuries).
+2. **Training Bible** *(this document)* — the *rules* (how to program). The coach's brain.
+3. **Exercise Library** — the *tools* (every movement, its load basis, the fault it fixes, its phase/level/equipment). The **single source of truth for movements and load math.**
+4. **Coach-Note Bible** — the *voice* (what the athlete reads before each session).
+
+**Two tiers, one brain:**
+- **Oly Team** (free) — this Bible *compiled* into a fixed, shared plan everyone runs: **5 days/week, 90-minute sessions**. Deterministic; see the **Oly Team Program** document.
+- **Personalized Coaching** (paid) — this Bible applied *live* by the AI to the individual; days/week and session length flex to the athlete's needs.
+
+### Shared Language (canonical terms — every document uses these exact words)
+
+**Product tiers:** Oly Team (free) · Personalized Coaching (paid).
+
+**Athlete development tiers:** Developing · Provincial · National+ (gates in 14A).
+
+**Season types (12-week blocks that rotate):** Base Season · Peak Season.
+
+**Phases (a week's position in a block):** Base · Strength · Peak · Deload · Taper · Max-Out (ends a Peak Season) · Base Test (ends a Base Season).
+
+**Fault taxonomy — onboarding limiter options, the Exercise Library's "fault corrected" column, and Section 5C all use these exact labels:**
+- *Snatch:* forward miss · backward miss · receiving depth (low/slow catch) · overhead instability · early arm-pull · soft finish
+- *Clean:* soft/slow catch · poor front rack · forward recovery
+- *Jerk:* forward dip · press-out · unstable overhead/split · soft drive
+- *Strength limiters:* leg/squat strength · pulling strength · positional/back strength
+- *Speed:* slow under the bar
+
+**Equipment (onboarding options = Exercise Library equipment column):** barbell + platform + bumpers (always assumed) · squat rack · lifting blocks · pulling blocks · jerk blocks · GHD/back-extension · bands · dumbbells.
+
+**Session standard:** Oly Team = **90 minutes, 5 days/week**. A 90-minute session ≈ warm-up (~10) + main classic lift (~30–35) + a pull or variation (~15) + a squat (~15–20) + 1–2 targeted accessories (~10). Personalized sessions flex around the athlete's available time (Section 4G).
 
 ---
 
@@ -88,6 +124,8 @@ The **leaderboard is a discovery-and-comparison tool** — rank and filter by cl
 ## Section 2 — The Movement Library
 
 The AI selects exercises by **job**, never randomly. Every movement belongs to a family with one primary purpose. The competition lifts and a squat form the spine of every training day; the other families fill in around them to build strength, positions, and the limiter.
+
+> **Source of truth:** the concrete list of movements — each with its exact load basis, the fault it corrects, its phase/level/equipment — lives in the **Exercise Library**, not here. This section defines the *rules for selecting by job*; the Library is the *menu* those rules pick from. When they ever disagree, this section governs *how to choose* and the Library governs *what exists and how it loads*.
 
 ### 2A. The families
 
@@ -247,7 +285,7 @@ Volume and intensity move in **opposite directions**: the body cannot recover fr
 
 ### 4G. Fitting the session to the clock (time budget)
 
-The AI must **estimate session duration and keep it within the athlete's session length** — never write a 2-hour session and label it 90 minutes. Rough time costs for *heavy* work with proper 2–4 min rest (Section 3I):
+The AI must **estimate session duration and keep it within the athlete's session length** — never write a 2-hour session and label it 90 minutes. **The Oly Team (free) standard is 90 minutes, 5 days/week** — every Team session is built to that budget. Personalized sessions use the athlete's own available time. Rough time costs for *heavy* work with proper 2–4 min rest (Section 3I):
 
 | Block | Time |
 |---|---|
@@ -453,6 +491,8 @@ The AI **always** produces a sound, safe program; a missing field costs a slight
 
 ### 9A. Variation → max conversion factors
 Non-competition movements have no logged max. Load them in two steps: **variation max = factor × the base-lift max**, then apply the working % to that.
+
+> These factors are mirrored per-movement in the **Exercise Library** (its load-basis column) — the Library is the source of truth the engine reads at runtime; this table is the human-readable reference. Keep the two in sync; if a movement exists in one but not the other, the Library wins.
 
 | Movement | % of base lift |
 |---|---|
