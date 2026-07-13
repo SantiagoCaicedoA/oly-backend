@@ -123,6 +123,11 @@ const userSchema = new Schema(
       type: profileSchema,
       default: undefined,
     },
+    // Product tier — 'personalized' unlocks the rolling AI coach; 'free' runs the deterministic Oly Team plan.
+    subscription: {
+      tier: { type: String, enum: ['free', 'personalized'], default: 'free' },
+      status: { type: String, enum: ['active', 'canceled', 'trialing'], default: 'active' },
+    },
   },
   { timestamps: true }
 );
