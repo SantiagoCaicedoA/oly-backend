@@ -16,12 +16,18 @@ const dayLists = (days) =>
     .filter(Boolean);
 
 const WARMUP_MIN = 9;
-function exerciseMinutes(name) {
-  if (isClassicMain(name) || isMainVariation(name)) return 28; // a classic lift/variation, ramp + work
-  if (isSquat(name)) return 17;
+const topPct = (ex) => Math.max(0, ...((ex && ex.sets) || []).map((s) => (typeof s.percent === 'number' ? s.percent : 0)));
+// Intensity-aware: a HEAVY main lift (ramp + heavy work) costs far more than a LIGHT corrective
+// variation done for a few sub-80% sets. Costing every classic-family movement as a full heavy
+// lift falsely flags a normal "main lift + corrective" day as over budget.
+function exerciseMinutes(ex) {
+  const name = ex && ex.name;
+  const top = topPct(ex);
+  if (isClassicMain(name) || isMainVariation(name)) return top >= 80 ? 28 : 12; // heavy main lift vs light corrective
+  if (isSquat(name)) return top >= 80 ? 18 : 15;
   if (/pull|deadlift/i.test(name)) return 12;
   if (/press|jerk/i.test(name)) return 12;
-  return 10; // accessory / prehab
+  return 8; // accessory / prehab (3 sets, short rest)
 }
 
 /**
@@ -37,7 +43,7 @@ function checkTimeBudget(weeks, opts = {}) {
     for (const dl of dayLists(w.days)) {
       dayNum++;
       let est = WARMUP_MIN;
-      for (const ex of dl) est += exerciseMinutes(ex && ex.name);
+      for (const ex of dl) est += exerciseMinutes(ex);
       if (est > budget + tol) {
         flags.push({
           type: 'session_over_budget', week: w.week, day: dayNum, est_minutes: est, budget,

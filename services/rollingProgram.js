@@ -60,6 +60,7 @@ function buildWeekPrompt(profile, maxes, slot, feedbackSummary, directives) {
     `# THIS WEEK'S PLAN SLOT (from the block plan — execute it)\n${JSON.stringify(slot)}\n\n` +
     `# RECENT ATHLETE FEEDBACK — ADAPT TO THIS (progress on makes, hold/insert the corrective on misses, respect readiness)\n${feedbackSummary}\n\n` +
     `# TASK — write ONLY this one week's sessions, executing the plan slot's phase, top intensity, squat %, and variation choices, adjusted for the feedback above. Every set's percent is a % of the parent lift's max.\n\n` +
+    `REP SCHEME (strict): classic lifts and their close variations (pause, hang, block, no-feet, power, drop, balance) stay in SINGLES or DOUBLES above 75% — triples only at ≤75% for technique. Squats/pulls per the phase.\n\n` +
     `Output ONLY this JSON:\n${WEEK_SHAPE}\n${directives ? `\n${directives}\n` : ''}\nOutput ONLY the JSON object.`;
 }
 
@@ -150,7 +151,13 @@ async function advanceRollingBlock(user, opts = {}) {
   const sessionMinutes = (profile.availability && profile.availability.session_duration) || 90;
   const built = await generateWeek(profile, block, weekIndex, feedback, maxes, { tier, sessionMinutes });
 
-  return { ok: true, week_index: weekIndex, tier, plan: block.plan, week: built.week, report: built.report, reasoning: built.reasoning, feedback: feedback.summary };
+  return {
+    ok: true, week_index: weekIndex, tier, plan: block.plan, week: built.week, report: built.report,
+    reasoning: built.reasoning, feedback: feedback.summary,
+    // Block metadata for storage + coach-note context:
+    block_id: block._id, phase: (built.slot && built.slot.phase) || null, weeks_total: block.weeks_total,
+    ending: block.ending, slot: built.slot,
+  };
 }
 
 module.exports = { generateBlockPlan, generateWeek, processWeek, advanceRollingBlock, buildPlanPrompt, buildWeekPrompt };

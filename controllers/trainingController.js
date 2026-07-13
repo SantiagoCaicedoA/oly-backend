@@ -337,7 +337,56 @@ async function generateRollingWeek(req, res, next) {
   }
 }
 
-module.exports = { generate, getWeek, logActivity, addCustomSet, deleteCustomSet, generateFullProgram, generateRollingWeek };
+/**
+ * POST /api/training/set-tier   Body: { tier: 'free' | 'personalized' }
+ * DEV/self-serve: set the logged-in user's subscription tier (until billing exists).
+ */
+async function setTier(req, res, next) {
+  try {
+    const tier = req.body && req.body.tier;
+    if (!['free', 'personalized'].includes(tier)) {
+      return res.status(400).json({ success: false, message: 'tier must be "free" or "personalized".' });
+    }
+    req.user.subscription = req.user.subscription || {};
+    req.user.subscription.tier = tier;
+    req.user.markModified('subscription');
+    await req.user.save();
+    return res.status(200).json({ success: true, tier: req.user.subscription.tier });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * POST /api/training/regenerate
+ * Rebuild THIS week for the logged-in athlete through their tier's pipeline (personalized →
+ * rolling AI coach with fallback; free → deterministic) and STORE it, overwriting the current
+ * week. Returns the stored week. Exercises the full store path the cron/onboarding use.
+ */
+async function regenerateWeek(req, res, next) {
+  try {
+    const { generateFirstWeek, generateNextWeekForUser } = require('../services/generateTrainingWeek');
+    const doNext = req.body && req.body.next === true;
+    let doc;
+    if (doNext) {
+      // Build NEXT week (keeps this week + its logs; reads them to adapt).
+      doc = await generateNextWeekForUser(req.user);
+    } else {
+      const WeeklyTraining = require('../models/WeeklyTraining');
+      const { getWeekStart } = require('../services/trainingWeekService');
+      await WeeklyTraining.deleteMany({ user: req.user._id, week_start: getWeekStart(new Date()) }); // clean overwrite of this week
+      doc = await generateFirstWeek(req.user);
+    }
+    return res.status(200).json({
+      success: true, tier: (req.user.subscription && req.user.subscription.tier) || 'free',
+      week_start: doc.week_start, block_week: doc.block_week, phase: doc.phase, days: doc.days,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { generate, getWeek, logActivity, addCustomSet, deleteCustomSet, generateFullProgram, generateRollingWeek, setTier, regenerateWeek };
 
 /**
  * POST /api/training/week/custom-set

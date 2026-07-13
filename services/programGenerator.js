@@ -85,6 +85,7 @@ function buildUserPrompt(profile, maxes, opts = {}) {
     `# MAXES (kg) — every percentage you write is a % of the athlete's max for that exercise's PARENT lift\n${JSON.stringify(maxes)}\n\n` +
     `# TASK\nProduce a complete ${weeks}-week program by following the Generation Spec EXACTLY. Work the decision procedure (diagnose the limiter + its direction, set the phases/timeline, build every week, program the peak, self-check against every hard rule).\n\n` +
     `Output ONLY this JSON shape — no prose, no kilograms (the engine computes kilos from your percentages):\n${OUTPUT_SHAPE}\n\n` +
+    `REP SCHEME (strict): the classic lifts AND their close variations (pause, hang, block, no-feet, power, drop, balance) stay in SINGLES or DOUBLES whenever the load is above 75% — triples only at ≤75%, for technique. Squats/pulls follow the phase's rep ranges.\n` +
     `Every set's "percent" is a % of the athlete's max for that exercise's parent lift. Use only exercises that exist in the library. Output ONLY the JSON object.`;
 }
 
