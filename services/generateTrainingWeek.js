@@ -17,27 +17,46 @@ const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'satu
 const isPersonalized = (user) => user && user.subscription && user.subscription.tier === 'personalized';
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
+// Guaranteed "never more than 3 in a row" layouts, evaluated CYCLICALLY (Sun wraps to Mon).
+// index 0=Mon … 6=Sun. Sunday is kept as rest whenever possible so weeks don't chain together.
+const WEEK_PATTERNS = {
+  0: 'RRRRRRR', 1: 'TRRRRRR', 2: 'TRRTRRR', 3: 'TRTRTRR',
+  4: 'TTTRTRR', 5: 'TTTRTTR', 6: 'TTTRTTT', 7: 'TTTTTTT',
+};
+
+/** Longest run of training days across the REPEATING week (handles the Sun→Mon wrap). */
+function cyclicMaxRun(trainIdx) {
+  if (trainIdx.size >= 7) return 7;
+  if (trainIdx.size === 0) return 0;
+  let mx = 0, run = 0;
+  for (let i = 0; i < 14; i++) { if (trainIdx.has(i % 7)) { run++; if (run > mx) mx = run; } else run = 0; }
+  return mx;
+}
+function splitByIdx(trainIdx) {
+  const train = [], rest = [];
+  for (let i = 0; i < 7; i++) (trainIdx.has(i) ? train : rest).push(DAY_ORDER[i]);
+  return { train, rest };
+}
+
 /**
- * Schedule N training days across the week with NEVER more than 3 in a row — insert a rest
- * after the 3rd training day (or the 2nd if that's what it takes to fit), honoring the athlete's
- * preferred rest days where the rule allows. Returns { train:[weekday...], rest:[weekday...] }.
+ * Schedule N training days with NEVER more than 3 in a row — counting the week as it actually
+ * runs, repeating (Sun connects to Mon). Honors the athlete's preferred rest days when they
+ * still satisfy the rule; otherwise uses a guaranteed pattern (which keeps Sunday as rest).
+ * (6–7 days can't satisfy max-3 with a weekly repeat — best-effort in that case.)
  */
 function scheduleWeek(count, preferredRest = []) {
-  const restSet = new Set((preferredRest || []).map((d) => String(d).toLowerCase()));
-  const train = [], rest = [];
-  let placed = 0, consec = 0;
-  for (let i = 0; i < 7; i++) {
-    const day = DAY_ORDER[i];
-    const need = count - placed, slotsLeft = 7 - i;
-    if (need <= 0) { rest.push(day); continue; }
-    const mustTrain = need >= slotsLeft; // no room left to rest and still hit the count
-    const mustRest = consec >= 3;        // hard max-3-in-a-row rule
-    let doTrain;
-    if (mustRest) doTrain = false;               // rule wins (may cost a day, which is correct)
-    else if (mustTrain) doTrain = true;
-    else doTrain = !restSet.has(day);            // honor a preferred rest day when we're free to
-    if (doTrain) { train.push(day); placed++; consec++; } else { rest.push(day); consec = 0; }
+  count = Math.max(0, Math.min(7, Math.floor(count) || 0));
+  // 1) Try honoring the athlete's exact preferred rest days — but only if it stays ≤3 in a row cyclically.
+  const prefIdx = new Set((preferredRest || []).map((d) => DAY_ORDER.indexOf(String(d).toLowerCase())).filter((i) => i >= 0));
+  if (prefIdx.size === 7 - count) {
+    const trainIdx = new Set();
+    for (let i = 0; i < 7; i++) if (!prefIdx.has(i)) trainIdx.add(i);
+    if (cyclicMaxRun(trainIdx) <= 3) return splitByIdx(trainIdx);
   }
+  // 2) Fall back to a pattern that's guaranteed safe across the week boundary.
+  const pat = WEEK_PATTERNS[count] || WEEK_PATTERNS[5];
+  const train = [], rest = [];
+  for (let i = 0; i < 7; i++) (pat[i] === 'T' ? train : rest).push(DAY_ORDER[i]);
   return { train, rest };
 }
 
