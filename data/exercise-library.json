@@ -35,7 +35,7 @@
     "contraindications": "Acute wrist/shoulder/low-back injury → regress to variations",
     "staple": true,
     "raw_fault": "This IS the sport — not a corrective. Builds full-lift make-rate, speed under the bar and competition specificity; every fault is ultimately rehearsed and expressed here.",
-    "est_max_ratio": 1.0
+    "est_max_ratio": 1
   },
   {
     "name": "Clean & Jerk",
@@ -72,7 +72,7 @@
     "contraindications": "Acute injury → regress",
     "staple": true,
     "raw_fault": "This IS the sport — not a corrective. Builds full-lift make-rate and competition specificity across both the clean and the jerk.",
-    "est_max_ratio": 1.0
+    "est_max_ratio": 1
   },
   {
     "name": "Clean",
@@ -643,9 +643,9 @@
     "load": {
       "type": "percent",
       "parent": "snatch",
-      "pct_min": 100,
-      "pct_max": 110,
-      "raw": "100–110% of snatch max (basis: snatch)"
+      "pct_min": 75,
+      "pct_max": 100,
+      "raw": "Working load 75–100% of snatch max (light positional → heavy). Estimated OHS max ≈ 100–110% of snatch (est_max_ratio)."
     },
     "reps": "2–5 reps",
     "intensity": "Light/technique → Moderate (not a max grind)",
@@ -1761,7 +1761,7 @@
     "contraindications": "Knee/low-back flags → box or tempo squat, cut depth/volume",
     "staple": true,
     "raw_fault": "The total is capped by leg/squat strength → the back squat builds the general strength engine underpinning standing out of cleans and driving the jerk. Priority stays high until ratios show strength-sufficiency.",
-    "est_max_ratio": 1.0
+    "est_max_ratio": 1
   },
   {
     "name": "Front squat",
@@ -1773,9 +1773,9 @@
     "load": {
       "type": "percent",
       "parent": "front_squat",
-      "pct_min": 84,
-      "pct_max": 88,
-      "raw": "Own front-squat max (or 84–88% of back squat if untested)"
+      "pct_min": 70,
+      "pct_max": 92,
+      "raw": "Working load 70–92% of own front-squat max, waved by phase. If untested, estimate front-squat max ≈ 84–88% of back squat (bible 9C), then load off that."
     },
     "reps": "Strength 3→2 reps; volume up to 5",
     "intensity": "Moderate → Max",
@@ -1799,7 +1799,7 @@
     "contraindications": "Knee (deep), wrist/elbow mobility → strap or regress",
     "staple": true,
     "raw_fault": "Stuck in the bottom of the clean / can't recover → the front squat directly overloads the clean-recovery position and upright trunk, raising the weight the athlete can stand up with.",
-    "est_max_ratio": 1.0
+    "est_max_ratio": 1
   },
   {
     "name": "Pause back squat",

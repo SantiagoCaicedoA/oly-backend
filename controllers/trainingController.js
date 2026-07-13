@@ -2,6 +2,7 @@ const WeeklyTraining = require('../models/WeeklyTraining');
 const SetLog = require('../models/SetLog');
 const { generateTrainingResponse } = require('../services/openaiService');
 const { generateProgram } = require('../services/programGenerator');
+const { advanceRollingBlock } = require('../services/rollingProgram');
 const { normalizeWorkoutTabData } = require('../utils/workoutTabSchema');
 
 /**
@@ -306,7 +307,37 @@ async function generateFullProgram(req, res, next) {
   }
 }
 
-module.exports = { generate, getWeek, logActivity, addCustomSet, deleteCustomSet, generateFullProgram };
+/**
+ * POST /api/training/rolling-week
+ * The PAID rolling pipeline: AI writes a block plan (first call), then builds THIS week from
+ * the plan slot + the athlete's latest feedback, through the full guard chain. One cheap call
+ * per week (no frozen 12-week dump, no timeout).
+ *
+ * Body (optional): profile (test athlete override), weeks (block length, default 12),
+ *   checkIn ({sleep_quality,stress_level,mental_readiness} for readiness).
+ * Returns: { success, week_index, tier, plan, week, report, reasoning, feedback }
+ */
+async function generateRollingWeek(req, res, next) {
+  try {
+    const profile = (req.body && req.body.profile) || null; // null => use the logged-in user's profile
+    if (!profile && !(req.user && req.user.profile)) {
+      return res.status(400).json({ success: false, message: 'No athlete profile available. Pass "profile" in the body or complete onboarding.' });
+    }
+    const result = await advanceRollingBlock(req.user, {
+      profile: profile || undefined,
+      checkIn: (req.body && req.body.checkIn) || null,
+      weeks: req.body && Number(req.body.weeks) > 0 ? Number(req.body.weeks) : 12,
+    });
+    if (!result.ok) {
+      return res.status(422).json({ success: false, message: 'Pre-flight check failed.', preflight: result.preflight });
+    }
+    return res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { generate, getWeek, logActivity, addCustomSet, deleteCustomSet, generateFullProgram, generateRollingWeek };
 
 /**
  * POST /api/training/week/custom-set
