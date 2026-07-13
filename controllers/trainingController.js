@@ -78,6 +78,7 @@ async function getWeek(req, res, next) {
     const userId = req.user._id;
     const doc = await WeeklyTraining.findOne({ user: userId })
       .sort({ week_start: -1 })
+      .populate('block', 'weeks_total season_name ending')
       .lean();
 
     if (!doc) {
@@ -105,6 +106,11 @@ async function getWeek(req, res, next) {
         days: doc.days,
         is_first_week: doc.is_first_week,
         profile_snapshot: doc.profile_snapshot,
+        // Real phase/block context for the Workout-tab header (replaces the hardcoded placeholder).
+        phase: doc.phase || null,
+        block_week: doc.block_week || null,
+        weeks_total: (doc.block && doc.block.weeks_total) || null,
+        season_name: (doc.block && doc.block.season_name) || null,
       },
     });
   } catch (error) {
