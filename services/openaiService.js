@@ -10,7 +10,6 @@ const llm = require('./llmClient');
 
 // The app talks to the model through llmClient (Claude primary, OpenAI fallback).
 // An LLM is available if EITHER provider key is set; the client picks the provider.
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const hasLLM = () => Boolean(process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY);
 
 /** JSON schema: each exercise has a "sets" array; each set has set_number, weight, reps, rpm_percent (MUST BE A NUMBER 0-100, NEVER NULL), intent (training purpose), and context (set position/description). */

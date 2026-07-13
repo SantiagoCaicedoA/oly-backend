@@ -26,19 +26,47 @@ function repCeiling(reps) {
   return 0.80;
 }
 
-// Match an engine/AI exercise name to a library record (fuzzy: normalized prefix/keywords).
+// Tokenize a movement name for tolerant matching: drop punctuation/parens (keeping the
+// words inside them, e.g. "above knee") and common filler, so the AI's natural phrasing
+// ("Pause snatch") still resolves to the library's canonical name
+// ("Pause / segment snatch (pause at knee)").
+const STOP = new Set(['the', 'a', 'of', 'from', 'or', 'and', 'with', 'grip', 'at', 'to']);
+function normTokens(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[()\/,+._\-]/g, ' ')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w && !STOP.has(w));
+}
+
+/**
+ * Match an AI/engine exercise name to a library record by token overlap (alias-aware).
+ * Scores mainly by how much of the QUERY the candidate covers, with a slight preference
+ * for the tightest candidate — so "Snatch" resolves to the comp lift, not a variation,
+ * and "Pause snatch" resolves to the pause variation, not the plain snatch.
+ */
 function findExercise(name) {
-  const n = String(name || '').toLowerCase().replace(/[()]/g, '').trim();
+  const q = normTokens(name);
+  if (!q.length) return null;
+  const qset = new Set(q);
   const lib = library();
   let best = null;
+  let bestScore = 0;
   for (const e of lib) {
-    const ln = e.name.toLowerCase().replace(/[()]/g, '').trim();
-    if (ln === n) return e;
-    if (ln.startsWith(n) || n.startsWith(ln.split(' ').slice(0, 2).join(' '))) {
-      if (!best || ln.length < best.name.length) best = e;
+    const names = [e.name, ...(Array.isArray(e.aliases) ? e.aliases : [])];
+    for (const nm of names) {
+      const t = new Set(normTokens(nm));
+      if (!t.size) continue;
+      let shared = 0;
+      for (const w of qset) if (t.has(w)) shared++;
+      if (!shared) continue;
+      const score = shared / qset.size + (shared / t.size) * 0.1; // query-coverage dominant
+      if (score > bestScore) { bestScore = score; best = e; }
     }
   }
-  return best;
+  // Require at least half the query's words to land, to avoid junk matches.
+  return bestScore >= 0.5 ? best : null;
 }
 
 /**

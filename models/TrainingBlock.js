@@ -17,6 +17,11 @@ const planWeekSchema = new mongoose.Schema(
     is_deload: Boolean,
     is_special: Boolean, // max-out / base-test week
     note: String, // the week's intention — drives the coach note's "where you are / why"
+    // Personalized (paid) plans carry the AI's rotation choices for the week (team plans leave these blank):
+    main_variation: String,   // the main-lift-slot variation to feature on secondary days (e.g. "pause snatch")
+    pull_variation: String,   // the pull variation for the week
+    accessory_focus: String,  // the week's accessory emphasis (limiter-biased)
+    emphasis: String,         // which lift/quality this week biases toward
   },
   { _id: false }
 );

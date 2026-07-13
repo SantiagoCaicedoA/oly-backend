@@ -19,7 +19,11 @@ const { complete } = require('./llmClient');
 const { getFullDocumentText } = require('./documentService');
 const { lintExercises, findExercise } = require('./plausibilityLinter');
 const { checkProgram } = require('./volumeIntensityLinter');
-const { formatProfileForPrompt } = require('./openaiService');
+const { checkOverload } = require('./volumeCapLinter');
+const { checkTierCap } = require('./tierCapLinter');
+const { checkProgression } = require('./progressionLinter');
+const { checkTimeBudget } = require('./timeBudgetLinter');
+const { formatProfileForPrompt, resolveTier } = require('./openaiService');
 const { checkInputs, buildDirectives } = require('./preflight');
 
 let LIB = null;
@@ -103,54 +107,93 @@ function computeLoads(program, maxes) {
   });
 }
 
-/**
- * Run both guardrails and repair in place. Returns a report of what changed
- * and any residual warnings the AI should ideally fix.
- */
-function lintAndRepair(program, maxes) {
-  // Adapt weeks to the volume/intensity linter's shape (days = arrays of exercises).
-  const viWeeks = (program.weeks || []).map((w) => ({ phase: w.phase, days: (w.days || []).map((d) => d.exercises || []) }));
-
-  // Pass A — volume/intensity REPAIR: lift a too-light strength squat up to the band.
-  const viRepair = checkProgram(viWeeks, { repair: true });
-  computeLoads(program, maxes); // squat % may have moved → refresh kilos
-
-  // Pass B — plausibility REPAIR: clamp any physically impossible (too-heavy) load.
-  const flat = [];
+/** Map an intensity % to an RPE target (bible §9D), for beginner "load by feel" mode. */
+function pctToRPE(p) {
+  if (p >= 88) return 9;
+  if (p >= 82) return 8;
+  if (p >= 76) return 7;
+  if (p >= 68) return 6;
+  return 5;
+}
+/** Developing athletes train to an RPE target, not a % of an unreliable max (bible §8B). */
+function applyLoadMode(program, tier) {
+  if (tier !== 'Developing') return { mode: 'percent' };
   eachExercise(program, (ex) => {
-    for (const s of ex.sets || []) s.weight = s.computed_kg; // linter reads .weight
-    flat.push({ exercise_name: ex.name, sets: ex.sets });
+    for (const s of ex.sets || []) if (typeof s.percent === 'number') s.rpe_target = pctToRPE(s.percent);
   });
+  program.load_mode = 'rpe';
+  return { mode: 'rpe' };
+}
+
+/**
+ * Run the full guard chain and repair in place, in dependency order:
+ *   too light → tier ceiling → (recompute kilos) → too heavy → too much volume,
+ * then flag-only structural checks (variety, time budget, deload, progression).
+ * All guards operate on the SAME exercise/set objects, so repairs propagate.
+ */
+function lintAndRepair(program, maxes, opts = {}) {
+  const tier = opts.tier || 'Provincial';
+  const sessionMinutes = opts.sessionMinutes || 90;
+  // One adapted view (days = arrays of the REAL exercise objects) shared by every guard.
+  const viWeeks = (program.weeks || []).map((w) => ({ week: w.week, phase: w.phase, days: (w.days || []).map((d) => d.exercises || []) }));
+
+  // 1) too LIGHT — lift a too-light strength squat up to the band.
+  const viRepair = checkProgram(viWeeks, { repair: true });
+  // 2) tier CEILING — clamp intensity to the athlete's tier cap (after the squat-up, so a beginner's squat can't be driven past 80%).
+  const tcRepair = checkTierCap(viWeeks, { tier, repair: true });
+  computeLoads(program, maxes); // % moved in steps 1–2 → refresh kilos
+
+  // 3) too HEAVY — clamp any physically impossible load, reflect back to % + kg.
+  const flat = [];
+  eachExercise(program, (ex) => { for (const s of ex.sets || []) s.weight = s.computed_kg; flat.push({ exercise_name: ex.name, sets: ex.sets }); });
   const plRepair = lintExercises(flat, maxes, { repair: true });
-  // Reflect any clamp back into percent + computed_kg, then drop the temp .weight.
   eachExercise(program, (ex) => {
     const pmax = parentMaxFor(ex.name, maxes);
     for (const s of ex.sets || []) {
-      if (typeof s.weight === 'number') {
-        s.computed_kg = s.weight;
-        if (pmax) s.percent = Math.round((s.weight / pmax) * 100);
-        delete s.weight;
-      }
+      if (typeof s.weight === 'number') { s.computed_kg = s.weight; if (pmax) s.percent = Math.round((s.weight / pmax) * 100); delete s.weight; }
     }
   });
 
-  // Final flag-only pass to surface anything left (thin accessories, stale variety, still-light classics).
+  // 4) too MUCH volume — trim reps over the Prilepin/rep-scheme cap; flag weekly heavy-exposure overload.
+  const ovRepair = checkOverload(viWeeks, { tier, repair: true });
+
+  // 5) flag-only structural checks (need the AI to re-plan, not a numeric repair).
   const viFinal = checkProgram(viWeeks, { repair: false });
+  const tb = checkTimeBudget(viWeeks, { sessionMinutes });
+  const prog = checkProgression(viWeeks);
+
   return {
     squat_repairs: viRepair.flags.filter((f) => f.repaired),
+    tier_caps: tcRepair.flags,
     heavy_loads_repaired: plRepair.flags,
-    residual_warnings: viFinal.flags,
+    volume_trims: ovRepair.flags.filter((f) => f.type === 'reps_too_high'),
+    heavy_exposure: ovRepair.flags.filter((f) => f.type === 'heavy_exposure_overload'),
+    variety_intensity: viFinal.flags,
+    time_budget: tb.flags,
+    progression: prog.flags,
   };
 }
 
-/** Pure end-to-end processing of a raw AI program: compute + lint + repair. */
-function processProgram(program, maxes) {
+/** Pure end-to-end processing of a raw AI program: compute + full guard chain + load mode. */
+function processProgram(program, maxes, opts = {}) {
   computeLoads(program, maxes);
-  const fixes = lintAndRepair(program, maxes);
+  const fixes = lintAndRepair(program, maxes, opts);
+  const loadMode = applyLoadMode(program, opts.tier);
   const report = {
-    heavy_loads_repaired: fixes.heavy_loads_repaired.length,
-    squat_repairs: fixes.squat_repairs.length,
-    residual_warnings: fixes.residual_warnings,
+    load_mode: loadMode.mode,
+    repaired: {
+      heavy_loads: fixes.heavy_loads_repaired.length,
+      squats_lifted: fixes.squat_repairs.length,
+      tier_capped: fixes.tier_caps.length,
+      reps_trimmed: fixes.volume_trims.length,
+    },
+    // Everything that couldn't be auto-repaired and should bounce back to the AI.
+    warnings: [
+      ...fixes.variety_intensity,
+      ...fixes.heavy_exposure,
+      ...fixes.time_budget,
+      ...fixes.progression,
+    ],
     detail: fixes,
   };
   return { program, report };
@@ -159,7 +202,13 @@ function processProgram(program, maxes) {
 // ---------------------------------------------------------------------------
 // Orchestration: generate -> process -> (bounce once) -> return
 // ---------------------------------------------------------------------------
-const SERIOUS = new Set(['under_accessorized', 'squat_too_light', 'classic_too_light']);
+// Flags that couldn't be auto-repaired and are worth one AI regeneration.
+const SERIOUS = new Set([
+  'under_accessorized', 'squat_too_light', 'classic_too_light',   // volume/intensity
+  'heavy_exposure_overload',                                      // overtraining
+  'session_over_budget',                                          // won't fit the clock
+  'no_deload', 'deload_gap_too_long', 'no_progression', 'declining_block', // block structure
+]);
 
 async function generateProgram(profile, opts = {}) {
   const maxes = getMaxes(profile);
@@ -170,6 +219,12 @@ async function generateProgram(profile, opts = {}) {
     return { ok: false, preflight, program: null, report: null };
   }
 
+  // Deterministic decisions the guards need, computed once.
+  const ppOpts = {
+    tier: resolveTier(profile),
+    sessionMinutes: (profile.availability && profile.availability.session_duration) || 90,
+  };
+
   const system = await buildSystemPrompt();
   // Lock the computable decisions (tier cap, limiter+direction, session size, meet) into the prompt.
   const directives = buildDirectives(profile, maxes);
@@ -179,22 +234,22 @@ async function generateProgram(profile, opts = {}) {
   let program;
   try { program = JSON.parse(res1.content); } catch (e) { throw new Error('Generator returned invalid JSON: ' + (e && e.message)); }
 
-  const first = processProgram(program, maxes);
-  const serious = first.report.residual_warnings.filter((f) => SERIOUS.has(f.type));
+  const first = processProgram(program, maxes, ppOpts);
+  const serious = first.report.warnings.filter((f) => SERIOUS.has(f.type));
 
-  // One guarded retry if the linter still sees serious (non-auto-repairable) issues.
+  // One guarded retry if the guards still see serious (non-auto-repairable) issues.
   if (serious.length && !opts.noBounce) {
     const fixMsg = 'Your previous program had these issues the guardrails flagged. Regenerate the COMPLETE program fixing them while keeping everything else sound:\n- ' +
       serious.map((f) => f.note).join('\n- ');
     try {
       const res2 = await complete({ task: 'brain', system, user: `${user}\n\n# REVISION REQUIRED\n${fixMsg}`, json: true, maxTokens: 16000, temperature: 0.4, cacheSystem: true });
       const program2 = JSON.parse(res2.content);
-      const second = processProgram(program2, maxes);
-      return { ok: true, preflight, program: second.program, report: second.report, reasoning: program2.reasoning, self_check: program2.self_check, bounced: true, usage: [res1.usage, res2.usage] };
+      const second = processProgram(program2, maxes, ppOpts);
+      return { ok: true, preflight, tier: ppOpts.tier, program: second.program, report: second.report, reasoning: program2.reasoning, self_check: program2.self_check, bounced: true, usage: [res1.usage, res2.usage] };
     } catch (e) { /* fall through to the first (already repaired) program */ }
   }
 
-  return { ok: true, preflight, program: first.program, report: first.report, reasoning: program.reasoning, self_check: program.self_check, bounced: false, usage: [res1.usage] };
+  return { ok: true, preflight, tier: ppOpts.tier, program: first.program, report: first.report, reasoning: program.reasoning, self_check: program.self_check, bounced: false, usage: [res1.usage] };
 }
 
 module.exports = { generateProgram, processProgram, computeLoads, lintAndRepair, getMaxes, buildSystemPrompt, buildUserPrompt, parentMaxFor };
