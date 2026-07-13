@@ -6,15 +6,12 @@
  */
 
 const { getContextForPrompt, getFullDocumentText } = require('./documentService');
+const llm = require('./llmClient');
 
-// Initialize OpenAI at module level
+// The app talks to the model through llmClient (Claude primary, OpenAI fallback).
+// An LLM is available if EITHER provider key is set; the client picks the provider.
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-let openai = null;
-
-if (OPENAI_API_KEY) {
-  const OpenAI = require('openai');
-  openai = new OpenAI({ apiKey: OPENAI_API_KEY });
-}
+const hasLLM = () => Boolean(process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY);
 
 /** JSON schema: each exercise has a "sets" array; each set has set_number, weight, reps, rpm_percent (MUST BE A NUMBER 0-100, NEVER NULL), intent (training purpose), and context (set position/description). */
 const WORKOUT_TAB_JSON_SCHEMA = `{
@@ -77,7 +74,6 @@ const WORKOUT_TAB_JSON_SCHEMA = `{
   ]
 }`;
 
-const DEFAULT_MODEL = process.env.OPENAI_TRAINING_MODEL || 'gpt-4o-mini';
 
 /**
  * Format athlete profile (from User.profile) into text for the system prompt.
@@ -303,8 +299,8 @@ Output ONLY the JSON object.`;
 }
 
 async function generateTrainingResponse({ profile, request, feedback, documentContext, responseFormat }) {
-  if (!OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY is not set. Add it to your .env file.');
+  if (!hasLLM()) {
+    throw new Error('No LLM key set. Add ANTHROPIC_API_KEY (or OPENAI_API_KEY) to your environment.');
   }
 
   const queryForContext = [request, feedback].filter(Boolean).join(' ');
@@ -348,35 +344,18 @@ Respond only with training logic outputs (blocks, sessions, feedback-based adjus
     ? `Request: ${request}\n\nRecent athlete feedback to consider: ${feedback}`
     : request;
 
-  const response = await openai.chat.completions.create({
-    model: DEFAULT_MODEL,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userContent },
-    ],
-    max_tokens: isWorkoutTab ? 16000 : 2048,
+  const response = await llm.complete({
+    task: 'brain', // program generation / reasoning -> best model (Sonnet)
+    system: systemPrompt,
+    user: userContent,
+    json: isWorkoutTab,
+    maxTokens: isWorkoutTab ? 16000 : 2048,
     temperature: 0.4,
-    ...(isWorkoutTab ? { response_format: { type: 'json_object' } } : {}),
+    cacheSystem: true, // the bible/library in the system prompt is large & static — cache it
   });
 
-  const choice = response.choices?.[0];
-  let content = choice?.message?.content?.trim() || 'No response generated.';
-
-  if (isWorkoutTab) {
-    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-    if (jsonMatch) {
-      content = jsonMatch[1].trim();
-    } else {
-      const startIdx = content.indexOf('{');
-      const endIdx = content.lastIndexOf('}');
-      if (startIdx !== -1 && endIdx !== -1) {
-        content = content.slice(startIdx, endIdx + 1).trim();
-      }
-    }
-  }
-  const usage = response.usage ? { prompt_tokens: response.usage.prompt_tokens, completion_tokens: response.usage.completion_tokens } : undefined;
-
-  return { content, usage };
+  const content = response.content?.trim() || 'No response generated.';
+  return { content, usage: response.usage };
 }
 
 /**
@@ -392,7 +371,7 @@ Respond only with training logic outputs (blocks, sessions, feedback-based adjus
  * @returns {Promise<object|null>} { monday: { coach_note, key_cues }, ... } or null on failure
  */
 async function generateCoachNotes(profile, days, planContext = null) {
-  if (!OPENAI_API_KEY || !openai) return null;
+  if (!hasLLM()) return null;
 
   const bible = await getFullDocumentText('data/coach-note-bible.md');
   if (!bible) return null;
@@ -454,18 +433,17 @@ The example phrases in the bible show INTENT, not scripts. Do NOT copy them. Wri
 { "notes": [ { "day": "monday", "coach_note": "string", "key_cues": ["string", "string", "string"] } ] }
 Use the SAME day names as the sessions above (lowercase weekday). Output ONLY the JSON object.`;
 
-  const response = await openai.chat.completions.create({
-    model: DEFAULT_MODEL,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: 'Write the coach notes and cues for this week, following the Coach Note Bible exactly.' },
-    ],
-    max_tokens: 2000,
+  const response = await llm.complete({
+    task: 'notes', // coach-note voice -> cheap model (Haiku)
+    system: systemPrompt,
+    user: 'Write the coach notes and cues for this week, following the Coach Note Bible exactly.',
+    json: true,
+    maxTokens: 2000,
     temperature: 0.7,
-    response_format: { type: 'json_object' },
+    cacheSystem: true, // the coach-note bible is static — cache it
   });
 
-  const content = response.choices?.[0]?.message?.content?.trim();
+  const content = response.content?.trim();
   if (!content) return null;
 
   let parsed;
@@ -495,8 +473,8 @@ Use the SAME day names as the sessions above (lowercase weekday). Output ONLY th
  * Generate AI adjustment for a specific day based on abnormal check-in data
  */
 async function generateDailyAdjustment(day, checkIn, abnormalities, currentDayData) {
-  if (!OPENAI_API_KEY || !openai) {
-    throw new Error('OpenAI is not properly configured. Check OPENAI_API_KEY.');
+  if (!hasLLM()) {
+    throw new Error('No LLM key set. Add ANTHROPIC_API_KEY (or OPENAI_API_KEY).');
   }
 
   // Use minimal context for daily adjustments to avoid rate limits
@@ -558,25 +536,18 @@ Focus on safety and recovery. Be conservative with adjustments. Return only vali
 `;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content: "You are an expert Olympic weightlifting coach. Adjust training based on athlete's daily check-in data. Prioritize safety and recovery. Return only valid JSON."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
+    const response = await llm.complete({
+      task: 'adjust', // simple, conservative tweak -> cheap model (Haiku)
+      system: "You are an expert Olympic weightlifting coach. Adjust training based on athlete's daily check-in data. Prioritize safety and recovery. Return only valid JSON.",
+      user: prompt,
+      json: true,
       temperature: 0.3,
-      max_tokens: 1200,
+      maxTokens: 1200,
     });
 
-    const content = response.choices[0]?.message?.content;
+    const content = response.content;
     if (!content) {
-      throw new Error('No response from OpenAI');
+      throw new Error('No response from the model');
     }
 
     // Log the full AI response for debugging

@@ -34,7 +34,8 @@
     ],
     "contraindications": "Acute wrist/shoulder/low-back injury → regress to variations",
     "staple": true,
-    "raw_fault": "This IS the sport — not a corrective. Builds full-lift make-rate, speed under the bar and competition specificity; every fault is ultimately rehearsed and expressed here."
+    "raw_fault": "This IS the sport — not a corrective. Builds full-lift make-rate, speed under the bar and competition specificity; every fault is ultimately rehearsed and expressed here.",
+    "est_max_ratio": 1.0
   },
   {
     "name": "Clean & Jerk",
@@ -70,7 +71,8 @@
     ],
     "contraindications": "Acute injury → regress",
     "staple": true,
-    "raw_fault": "This IS the sport — not a corrective. Builds full-lift make-rate and competition specificity across both the clean and the jerk."
+    "raw_fault": "This IS the sport — not a corrective. Builds full-lift make-rate and competition specificity across both the clean and the jerk.",
+    "est_max_ratio": 1.0
   },
   {
     "name": "Clean",
@@ -111,7 +113,8 @@
     ],
     "contraindications": "Knee (deep catch), low-back → regress depth/volume",
     "staple": true,
-    "raw_fault": "Jerk fatigue caps clean volume when always trained as a full C&J → training the clean alone lets the athlete accumulate quality clean reps and drills recovery from the deep catch without the jerk limiting the dose."
+    "raw_fault": "Jerk fatigue caps clean volume when always trained as a full C&J → training the clean alone lets the athlete accumulate quality clean reps and drills recovery from the deep catch without the jerk limiting the dose.",
+    "est_max_ratio": null
   },
   {
     "name": "Split Jerk (from rack)",
@@ -152,7 +155,8 @@
     ],
     "contraindications": "Shoulder instability / overhead-aggravating injury",
     "staple": true,
-    "raw_fault": "Jerk is missed in the C&J because clean fatigue steals jerk practice → jerking fresh from the rack isolates the dip-drive and split so the most-missed phase gets dedicated, unfatigued reps."
+    "raw_fault": "Jerk is missed in the C&J because clean fatigue steals jerk practice → jerking fresh from the rack isolates the dip-drive and split so the most-missed phase gets dedicated, unfatigued reps.",
+    "est_max_ratio": null
   },
   {
     "name": "Power snatch",
@@ -162,8 +166,8 @@
     "load": {
       "type": "percent",
       "parent": "snatch",
-      "pct_min": 80,
-      "pct_max": 88,
+      "pct_min": 70,
+      "pct_max": 80,
       "raw": "80–88% of snatch max"
     },
     "reps": "Singles–doubles",
@@ -191,7 +195,8 @@
     ],
     "contraindications": "—",
     "staple": true,
-    "raw_fault": "Low, slow catch with a soft turnover because the athlete pulls high then crashes under → the power snatch forces a higher, faster catch and rewards complete extension, sharpening turnover speed and bar elevation."
+    "raw_fault": "Low, slow catch with a soft turnover because the athlete pulls high then crashes under → the power snatch forces a higher, faster catch and rewards complete extension, sharpening turnover speed and bar elevation.",
+    "est_max_ratio": 0.85
   },
   {
     "name": "Hang snatch (above knee / high hang)",
@@ -203,8 +208,8 @@
     "load": {
       "type": "percent",
       "parent": "snatch",
-      "pct_min": 88,
-      "pct_max": 92,
+      "pct_min": 78,
+      "pct_max": 85,
       "raw": "88–92% of snatch (above knee); high-hang ~80–88%"
     },
     "reps": "Singles–doubles (triples ≤ cap for volume)",
@@ -233,7 +238,8 @@
     ],
     "contraindications": "—",
     "staple": true,
-    "raw_fault": "Bar swings away / incomplete second pull because the athlete rushes the finish from the floor → starting above the knee removes the first pull and drills a vertical, complete second-pull extension with the bar kept close."
+    "raw_fault": "Bar swings away / incomplete second pull because the athlete rushes the finish from the floor → starting above the knee removes the first pull and drills a vertical, complete second-pull extension with the bar kept close.",
+    "est_max_ratio": 0.93
   },
   {
     "name": "Hang snatch (below knee)",
@@ -243,8 +249,8 @@
     "load": {
       "type": "percent",
       "parent": "snatch",
-      "pct_min": 90,
-      "pct_max": 93,
+      "pct_min": 78,
+      "pct_max": 85,
       "raw": "90–93% of snatch"
     },
     "reps": "Singles–doubles",
@@ -270,7 +276,8 @@
     ],
     "contraindications": "—",
     "staple": true,
-    "raw_fault": "Hips shoot up and bar drifts forward because the athlete loses the back angle early → starting below the knee trains holding the shoulders over the bar through the knee and a patient sweep, correcting the early hip rise."
+    "raw_fault": "Hips shoot up and bar drifts forward because the athlete loses the back angle early → starting below the knee trains holding the shoulders over the bar through the knee and a patient sweep, correcting the early hip rise.",
+    "est_max_ratio": 0.93
   },
   {
     "name": "Snatch from blocks (above knee)",
@@ -307,7 +314,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Weak/slow second pull because there is no stretch-reflex help → a dead-stop start above the knee forces the athlete to generate the finish from a static position, building second-pull power and positional strength."
+    "raw_fault": "Weak/slow second pull because there is no stretch-reflex help → a dead-stop start above the knee forces the athlete to generate the finish from a static position, building second-pull power and positional strength.",
+    "est_max_ratio": 0.96
   },
   {
     "name": "Snatch from blocks (below knee)",
@@ -347,7 +355,8 @@
     ],
     "contraindications": "Acute low-back pain → regress",
     "staple": false,
-    "raw_fault": "Slow off the floor / poor start position because the athlete can't hold the correct back angle under load → a dead-stop below-knee block start overloads the exact start position and builds first-pull strength without accumulating floor-lift fatigue."
+    "raw_fault": "Slow off the floor / poor start position because the athlete can't hold the correct back angle under load → a dead-stop below-knee block start overloads the exact start position and builds first-pull strength without accumulating floor-lift fatigue.",
+    "est_max_ratio": 0.96
   },
   {
     "name": "Deficit snatch",
@@ -388,7 +397,8 @@
     ],
     "contraindications": "Acute low-back pain → avoid",
     "staple": false,
-    "raw_fault": "Fast/weak off the floor with early hip rise because the posterior chain gives out low → standing on a deficit lengthens the first pull and raises time-under-tension at the bottom, forcing stronger, more patient back-and-leg extension. Excluded from the peak: too fatiguing and it degrades positions when sharpness matters."
+    "raw_fault": "Fast/weak off the floor with early hip rise because the posterior chain gives out low → standing on a deficit lengthens the first pull and raises time-under-tension at the bottom, forcing stronger, more patient back-and-leg extension. Excluded from the peak: too fatiguing and it degrades positions when sharpness matters.",
+    "est_max_ratio": 0.92
   },
   {
     "name": "Pause / segment snatch (pause at knee)",
@@ -427,7 +437,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Rushing through the knee and losing position because the athlete is impatient off the floor → a 2–3 s pause at the knee kills momentum and forces the athlete to own the position and finish correctly from it."
+    "raw_fault": "Rushing through the knee and losing position because the athlete is impatient off the floor → a 2–3 s pause at the knee kills momentum and forces the athlete to own the position and finish correctly from it.",
+    "est_max_ratio": 0.9
   },
   {
     "name": "No-feet snatch",
@@ -465,7 +476,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Snatch missed forward because the athlete jumps back and swings the bar away from the body → the no-feet snatch removes the foot re-set, forcing them to keep the bar over the base and finish vertically."
+    "raw_fault": "Snatch missed forward because the athlete jumps back and swings the bar away from the body → the no-feet snatch removes the foot re-set, forcing them to keep the bar over the base and finish vertically.",
+    "est_max_ratio": 0.85
   },
   {
     "name": "Tempo / slow-pull snatch",
@@ -504,7 +516,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Bar path drifts and positions blur because the athlete moves too fast to self-correct → a controlled tempo first pull ingrains the correct bar path and back angle and makes positional faults visible and fixable."
+    "raw_fault": "Bar path drifts and positions blur because the athlete moves too fast to self-correct → a controlled tempo first pull ingrains the correct bar path and back angle and makes positional faults visible and fixable.",
+    "est_max_ratio": 0.85
   },
   {
     "name": "Muscle snatch",
@@ -540,7 +553,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Slow, late turnover and soft lockout because the athlete relies on dropping under rather than pulling the bar high → the muscle snatch (no re-bend of the legs) trains a continuous pull to lockout, speeding turnover and strengthening the finish."
+    "raw_fault": "Slow, late turnover and soft lockout because the athlete relies on dropping under rather than pulling the bar high → the muscle snatch (no re-bend of the legs) trains a continuous pull to lockout, speeding turnover and strengthening the finish.",
+    "est_max_ratio": 0.65
   },
   {
     "name": "Tall snatch",
@@ -578,7 +592,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Slow pull under and late lockout because the athlete waits for the bar → starting tall on flat feet with no leg drive forces an aggressive fast pull under and punch to lockout, training pure speed under the bar."
+    "raw_fault": "Slow pull under and late lockout because the athlete waits for the bar → starting tall on flat feet with no leg drive forces an aggressive fast pull under and punch to lockout, training pure speed under the bar.",
+    "est_max_ratio": 0.55
   },
   {
     "name": "No-hook snatch / clean",
@@ -615,7 +630,8 @@
     ],
     "contraindications": "Grip/thumb pain",
     "staple": false,
-    "raw_fault": "Early arm pull / bar spins away because the athlete yanks with the hands and hook grip masks it → removing the hook forces staying connected and finishing with the legs and hips, exposing and correcting an early arm bend."
+    "raw_fault": "Early arm pull / bar spins away because the athlete yanks with the hands and hook grip masks it → removing the hook forces staying connected and finishing with the legs and hips, exposing and correcting an early arm bend.",
+    "est_max_ratio": 0.88
   },
   {
     "name": "Overhead squat",
@@ -655,7 +671,8 @@
     ],
     "contraindications": "Unstable / injured shoulders → regress or avoid",
     "staple": true,
-    "raw_fault": "Unstable or collapsing snatch catch because the athlete lacks strength and mobility in the bottom overhead position → the overhead squat builds active overhead stability and comfort in the deep catch so a received bar is controlled."
+    "raw_fault": "Unstable or collapsing snatch catch because the athlete lacks strength and mobility in the bottom overhead position → the overhead squat builds active overhead stability and comfort in the deep catch so a received bar is controlled.",
+    "est_max_ratio": 1.05
   },
   {
     "name": "Snatch balance",
@@ -665,8 +682,8 @@
     "load": {
       "type": "percent",
       "parent": "snatch",
-      "pct_min": 100,
-      "pct_max": 110,
+      "pct_min": 88,
+      "pct_max": 100,
       "raw": "100–110%+ of snatch"
     },
     "reps": "Singles–doubles",
@@ -691,7 +708,8 @@
     ],
     "contraindications": "Shoulder instability",
     "staple": true,
-    "raw_fault": "Hesitant, high catch because the athlete fears dropping under a heavy bar → the snatch balance drives the athlete fast under a supra-snatch load into a locked bottom, training speed under and confidence receiving heavy."
+    "raw_fault": "Hesitant, high catch because the athlete fears dropping under a heavy bar → the snatch balance drives the athlete fast under a supra-snatch load into a locked bottom, training speed under and confidence receiving heavy.",
+    "est_max_ratio": 1.08
   },
   {
     "name": "Drop snatch",
@@ -701,8 +719,8 @@
     "load": {
       "type": "percent",
       "parent": "snatch",
-      "pct_min": 80,
-      "pct_max": 95,
+      "pct_min": 62,
+      "pct_max": 72,
       "raw": "80–95% of snatch"
     },
     "reps": "Singles–doubles",
@@ -728,7 +746,8 @@
     ],
     "contraindications": "Shoulder instability",
     "staple": false,
-    "raw_fault": "Slow feet and a soft catch because the athlete rides the bar down → the drop snatch (no dip-drive) trains punching the feet out and locking the bottom fast with no leg contribution, sharpening the receiving position."
+    "raw_fault": "Slow feet and a soft catch because the athlete rides the bar down → the drop snatch (no dip-drive) trains punching the feet out and locking the bottom fast with no leg contribution, sharpening the receiving position.",
+    "est_max_ratio": 0.75
   },
   {
     "name": "Sots press (snatch grip)",
@@ -767,7 +786,8 @@
     ],
     "contraindications": "Shoulder/thoracic restriction → regress load or skip",
     "staple": false,
-    "raw_fault": "Bar drifts forward and torso tips in the catch because the athlete lacks upright overhead position in a full squat → pressing from the bottom of a squat builds the exact mobility and stability to hold the bar overhead with an upright torso."
+    "raw_fault": "Bar drifts forward and torso tips in the catch because the athlete lacks upright overhead position in a full squat → pressing from the bottom of a squat builds the exact mobility and stability to hold the bar overhead with an upright torso.",
+    "est_max_ratio": 0.45
   },
   {
     "name": "Snatch lift-off (halting DL to knee)",
@@ -806,7 +826,8 @@
     ],
     "contraindications": "Acute low-back pain",
     "staple": false,
-    "raw_fault": "Shoulders roll behind and hips shoot on the first pull because the athlete can't hold the start posture → a slow lift-off to the knee (then reset) overloads holding shoulders-over-bar off the floor, reinforcing the correct first-pull position."
+    "raw_fault": "Shoulders roll behind and hips shoot on the first pull because the athlete can't hold the start posture → a slow lift-off to the knee (then reset) overloads holding shoulders-over-bar off the floor, reinforcing the correct first-pull position.",
+    "est_max_ratio": 1.1
   },
   {
     "name": "Power clean",
@@ -816,8 +837,8 @@
     "load": {
       "type": "percent",
       "parent": "clean",
-      "pct_min": 80,
-      "pct_max": 85,
+      "pct_min": 70,
+      "pct_max": 80,
       "raw": "80–85% of clean max"
     },
     "reps": "Singles–doubles",
@@ -844,7 +865,8 @@
     ],
     "contraindications": "—",
     "staple": true,
-    "raw_fault": "Slow turnover and low elbows because the athlete pulls the bar into the shoulders → the power clean rewards full extension and a fast, high rack, sharpening turnover and elbow speed."
+    "raw_fault": "Slow turnover and low elbows because the athlete pulls the bar into the shoulders → the power clean rewards full extension and a fast, high rack, sharpening turnover and elbow speed.",
+    "est_max_ratio": 0.85
   },
   {
     "name": "Hang clean (above knee)",
@@ -854,8 +876,8 @@
     "load": {
       "type": "percent",
       "parent": "clean",
-      "pct_min": 88,
-      "pct_max": 92,
+      "pct_min": 78,
+      "pct_max": 85,
       "raw": "88–92% of clean"
     },
     "reps": "Singles–doubles",
@@ -882,7 +904,8 @@
     ],
     "contraindications": "—",
     "staple": true,
-    "raw_fault": "Early arm bend and incomplete extension from the floor → the above-knee start drills a complete vertical second pull with a patient finish, keeping the bar close."
+    "raw_fault": "Early arm bend and incomplete extension from the floor → the above-knee start drills a complete vertical second pull with a patient finish, keeping the bar close.",
+    "est_max_ratio": 0.93
   },
   {
     "name": "Hang clean (below knee)",
@@ -892,8 +915,8 @@
     "load": {
       "type": "percent",
       "parent": "clean",
-      "pct_min": 90,
-      "pct_max": 93,
+      "pct_min": 78,
+      "pct_max": 85,
       "raw": "90–93% of clean"
     },
     "reps": "Singles–doubles",
@@ -919,7 +942,8 @@
     ],
     "contraindications": "—",
     "staple": true,
-    "raw_fault": "Hips rise early and the bar loops out because the athlete loses the back angle through the knee → the below-knee start trains holding shoulders over the bar and a patient sweep, fixing early hip rise."
+    "raw_fault": "Hips rise early and the bar loops out because the athlete loses the back angle through the knee → the below-knee start trains holding shoulders over the bar and a patient sweep, fixing early hip rise.",
+    "est_max_ratio": 0.93
   },
   {
     "name": "Clean from blocks (above knee)",
@@ -956,7 +980,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Weak second pull without stretch-reflex help → a dead-stop block start above the knee forces finishing power from a static position, building second-pull strength."
+    "raw_fault": "Weak second pull without stretch-reflex help → a dead-stop block start above the knee forces finishing power from a static position, building second-pull strength.",
+    "est_max_ratio": 0.96
   },
   {
     "name": "Deficit clean",
@@ -995,7 +1020,8 @@
     ],
     "contraindications": "Acute low-back pain → avoid",
     "staple": false,
-    "raw_fault": "Weak, early-rising first pull because the posterior chain fails low → a deficit lengthens the first pull and overloads a patient, posterior-driven start. Kept out of the peak: too fatiguing and position-degrading near a max."
+    "raw_fault": "Weak, early-rising first pull because the posterior chain fails low → a deficit lengthens the first pull and overloads a patient, posterior-driven start. Kept out of the peak: too fatiguing and position-degrading near a max.",
+    "est_max_ratio": 0.92
   },
   {
     "name": "Pause / segment clean (pause at knee)",
@@ -1032,7 +1058,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Rushing through the knee and losing position → a 2–3 s pause at the knee removes momentum and forces owning the position before a correct finish."
+    "raw_fault": "Rushing through the knee and losing position → a 2–3 s pause at the knee removes momentum and forces owning the position before a correct finish.",
+    "est_max_ratio": 0.9
   },
   {
     "name": "Clean lift-off (halting DL to knee)",
@@ -1071,7 +1098,8 @@
     ],
     "contraindications": "Acute low-back pain",
     "staple": false,
-    "raw_fault": "Hips shoot and shoulders fall behind off the floor because the athlete can't hold the start posture → a slow halting lift-off to the knee overloads the exact first-pull position and back angle."
+    "raw_fault": "Hips shoot and shoulders fall behind off the floor because the athlete can't hold the start posture → a slow halting lift-off to the knee overloads the exact first-pull position and back angle.",
+    "est_max_ratio": 1.1
   },
   {
     "name": "Jerk from blocks",
@@ -1112,7 +1140,8 @@
     ],
     "contraindications": "Shoulder instability",
     "staple": false,
-    "raw_fault": "The jerk can't be trained heavy because the athlete is too fatigued from the clean → jerk blocks let the athlete overload the jerk fresh and heavy from a dead stop, building drive and lockout without cleaning the bar."
+    "raw_fault": "The jerk can't be trained heavy because the athlete is too fatigued from the clean → jerk blocks let the athlete overload the jerk fresh and heavy from a dead stop, building drive and lockout without cleaning the bar.",
+    "est_max_ratio": 1.02
   },
   {
     "name": "Power jerk (push jerk)",
@@ -1150,7 +1179,8 @@
     ],
     "contraindications": "—",
     "staple": true,
-    "raw_fault": "Weak drive and reliance on the split to rescue a soft jerk → the power jerk removes the split, forcing a powerful vertical drive and fast drop into a partial squat, building drive and speed under."
+    "raw_fault": "Weak drive and reliance on the split to rescue a soft jerk → the power jerk removes the split, forcing a powerful vertical drive and fast drop into a partial squat, building drive and speed under.",
+    "est_max_ratio": 0.92
   },
   {
     "name": "Behind-the-neck jerk",
@@ -1190,7 +1220,8 @@
     ],
     "contraindications": "Shoulder instability / mobility limits",
     "staple": false,
-    "raw_fault": "Bar drives forward and the athlete jerks around the face → jerking from behind the neck grooves a straight vertical drive and overhead position without the bar-around-chin detour."
+    "raw_fault": "Bar drives forward and the athlete jerks around the face → jerking from behind the neck grooves a straight vertical drive and overhead position without the bar-around-chin detour.",
+    "est_max_ratio": 0.95
   },
   {
     "name": "Jerk dip + drive",
@@ -1230,7 +1261,8 @@
     ],
     "contraindications": "Knee pain in the dip",
     "staple": false,
-    "raw_fault": "Soft, forward, or bent dip because the athlete lacks a controlled vertical dip and explosive drive → the jerk dip+drive overloads a straight-down dip and vertical drive, teaching the legs to launch the bar."
+    "raw_fault": "Soft, forward, or bent dip because the athlete lacks a controlled vertical dip and explosive drive → the jerk dip+drive overloads a straight-down dip and vertical drive, teaching the legs to launch the bar.",
+    "est_max_ratio": 1.15
   },
   {
     "name": "Jerk recovery (overhead support / walkout)",
@@ -1269,7 +1301,8 @@
     ],
     "contraindications": "Shoulder instability",
     "staple": false,
-    "raw_fault": "Bar crashes or drifts after the split because the athlete can't stabilize a heavy load overhead → holding/recovering a load above jerk max builds the overhead support strength to finish heavy jerks."
+    "raw_fault": "Bar crashes or drifts after the split because the athlete can't stabilize a heavy load overhead → holding/recovering a load above jerk max builds the overhead support strength to finish heavy jerks.",
+    "est_max_ratio": 1.15
   },
   {
     "name": "Jerk balance (split footwork drill)",
@@ -1307,7 +1340,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Inconsistent or short split with the bar landing forward → the jerk balance drills starting with the front foot forward and punching under a static bar, grooving footwork and a stable overhead landing."
+    "raw_fault": "Inconsistent or short split with the bar landing forward → the jerk balance drills starting with the front foot forward and punching under a static bar, grooving footwork and a stable overhead landing.",
+    "est_max_ratio": 0.55
   },
   {
     "name": "Pause jerk (pause in the dip)",
@@ -1344,7 +1378,8 @@
     ],
     "contraindications": "Knee pain in the dip",
     "staple": false,
-    "raw_fault": "Athlete dips crooked or rebounds too fast and loses the drive line → a pause at the bottom of the dip removes the bounce and forces a balanced dip before a vertical drive."
+    "raw_fault": "Athlete dips crooked or rebounds too fast and loses the drive line → a pause at the bottom of the dip removes the bounce and forces a balanced dip before a vertical drive.",
+    "est_max_ratio": 0.92
   },
   {
     "name": "Snatch pull",
@@ -1380,7 +1415,8 @@
     ],
     "contraindications": "—",
     "staple": true,
-    "raw_fault": "Bar elevation is capped by pulling strength → the snatch pull overloads the full extension pattern above snatch weight, raising how much bar the athlete can elevate and reinforcing a complete finish."
+    "raw_fault": "Bar elevation is capped by pulling strength → the snatch pull overloads the full extension pattern above snatch weight, raising how much bar the athlete can elevate and reinforcing a complete finish.",
+    "est_max_ratio": 1.25
   },
   {
     "name": "Clean pull",
@@ -1416,7 +1452,8 @@
     ],
     "contraindications": "—",
     "staple": true,
-    "raw_fault": "Clean bar elevation is capped by pulling strength → the clean pull overloads the extension pattern above clean weight, raising the ceiling and grooving a complete finish."
+    "raw_fault": "Clean bar elevation is capped by pulling strength → the clean pull overloads the extension pattern above clean weight, raising the ceiling and grooving a complete finish.",
+    "est_max_ratio": 1.25
   },
   {
     "name": "Snatch high pull",
@@ -1454,7 +1491,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Incomplete extension and a low, early pull → the high pull demands finishing the extension and pulling the bar high with the elbows up, training the top of the pull and turnover intent."
+    "raw_fault": "Incomplete extension and a low, early pull → the high pull demands finishing the extension and pulling the bar high with the elbows up, training the top of the pull and turnover intent.",
+    "est_max_ratio": 1.1
   },
   {
     "name": "Clean high pull",
@@ -1491,7 +1529,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Cutting the extension and pulling early with the arms → the clean high pull trains a full finish then a high elbow pull, sequencing the top of the pull correctly."
+    "raw_fault": "Cutting the extension and pulling early with the arms → the clean high pull trains a full finish then a high elbow pull, sequencing the top of the pull correctly.",
+    "est_max_ratio": 1.1
   },
   {
     "name": "Snatch deadlift",
@@ -1527,7 +1566,8 @@
     ],
     "contraindications": "Acute low-back pain → reduce load/ROM",
     "staple": true,
-    "raw_fault": "Weak or unstable start position and slow floor speed → the snatch-grip deadlift overloads the start posture and posterior chain, strengthening the positions the pull is built on."
+    "raw_fault": "Weak or unstable start position and slow floor speed → the snatch-grip deadlift overloads the start posture and posterior chain, strengthening the positions the pull is built on.",
+    "est_max_ratio": 1.3
   },
   {
     "name": "Clean deadlift",
@@ -1565,7 +1605,8 @@
     ],
     "contraindications": "Acute low-back pain → reduce load/ROM",
     "staple": true,
-    "raw_fault": "Weak start position and slow first pull in the clean → the clean-grip deadlift overloads the exact start posture and posterior chain."
+    "raw_fault": "Weak start position and slow first pull in the clean → the clean-grip deadlift overloads the exact start posture and posterior chain.",
+    "est_max_ratio": 1.3
   },
   {
     "name": "Deficit snatch pull",
@@ -1603,7 +1644,8 @@
     ],
     "contraindications": "Acute low-back pain → avoid",
     "staple": false,
-    "raw_fault": "Weak, early-rising first pull → a deficit lengthens the first pull and overloads a patient, posterior-driven start. Excluded from the peak: fatiguing and it can degrade positions near a max."
+    "raw_fault": "Weak, early-rising first pull → a deficit lengthens the first pull and overloads a patient, posterior-driven start. Excluded from the peak: fatiguing and it can degrade positions near a max.",
+    "est_max_ratio": 1.25
   },
   {
     "name": "Deficit clean pull",
@@ -1641,7 +1683,8 @@
     ],
     "contraindications": "Acute low-back pain → avoid",
     "staple": false,
-    "raw_fault": "Weak, early-rising first pull in the clean → a deficit lengthens and overloads a patient posterior-driven start. Excluded from the peak."
+    "raw_fault": "Weak, early-rising first pull in the clean → a deficit lengthens and overloads a patient posterior-driven start. Excluded from the peak.",
+    "est_max_ratio": 1.25
   },
   {
     "name": "Segment pull (pause below knee)",
@@ -1681,7 +1724,8 @@
     ],
     "contraindications": "Acute low-back pain",
     "staple": false,
-    "raw_fault": "Rushing the first pull and losing the back angle → a pause below the knee ingrains holding position before the finish, correcting an early hip rise or bar drift."
+    "raw_fault": "Rushing the first pull and losing the back angle → a pause below the knee ingrains holding position before the finish, correcting an early hip rise or bar drift.",
+    "est_max_ratio": 1.2
   },
   {
     "name": "Back squat",
@@ -1716,7 +1760,8 @@
     ],
     "contraindications": "Knee/low-back flags → box or tempo squat, cut depth/volume",
     "staple": true,
-    "raw_fault": "The total is capped by leg/squat strength → the back squat builds the general strength engine underpinning standing out of cleans and driving the jerk. Priority stays high until ratios show strength-sufficiency."
+    "raw_fault": "The total is capped by leg/squat strength → the back squat builds the general strength engine underpinning standing out of cleans and driving the jerk. Priority stays high until ratios show strength-sufficiency.",
+    "est_max_ratio": 1.0
   },
   {
     "name": "Front squat",
@@ -1753,7 +1798,8 @@
     ],
     "contraindications": "Knee (deep), wrist/elbow mobility → strap or regress",
     "staple": true,
-    "raw_fault": "Stuck in the bottom of the clean / can't recover → the front squat directly overloads the clean-recovery position and upright trunk, raising the weight the athlete can stand up with."
+    "raw_fault": "Stuck in the bottom of the clean / can't recover → the front squat directly overloads the clean-recovery position and upright trunk, raising the weight the athlete can stand up with.",
+    "est_max_ratio": 1.0
   },
   {
     "name": "Pause back squat",
@@ -1763,8 +1809,8 @@
     "load": {
       "type": "percent",
       "parent": "back_squat",
-      "pct_min": 85,
-      "pct_max": 90,
+      "pct_min": 78,
+      "pct_max": 85,
       "raw": "~85–90% of back-squat max"
     },
     "reps": "2–4 reps (2–3 s pause)",
@@ -1790,7 +1836,8 @@
     ],
     "contraindications": "Knee/low-back flags",
     "staple": false,
-    "raw_fault": "Bounces out of the bottom and collapses forward → a 2–3 s pause removes the stretch reflex and builds strength and an upright position from a dead bottom."
+    "raw_fault": "Bounces out of the bottom and collapses forward → a 2–3 s pause removes the stretch reflex and builds strength and an upright position from a dead bottom.",
+    "est_max_ratio": 0.9
   },
   {
     "name": "Pause front squat",
@@ -1800,8 +1847,8 @@
     "load": {
       "type": "percent",
       "parent": "front_squat",
-      "pct_min": 85,
-      "pct_max": 90,
+      "pct_min": 78,
+      "pct_max": 85,
       "raw": "~85–90% of front-squat max"
     },
     "reps": "2–4 reps (2–3 s pause)",
@@ -1827,7 +1874,8 @@
     ],
     "contraindications": "Knee (deep), wrist mobility",
     "staple": false,
-    "raw_fault": "Buried and stalls at the bottom of a clean → the paused front squat builds the ability to start the drive from a dead stop in the exact recovery position."
+    "raw_fault": "Buried and stalls at the bottom of a clean → the paused front squat builds the ability to start the drive from a dead stop in the exact recovery position.",
+    "est_max_ratio": 0.9
   },
   {
     "name": "Tempo squat (back or front)",
@@ -1863,7 +1911,8 @@
     ],
     "contraindications": "Knee/low-back flags → reduce range",
     "staple": false,
-    "raw_fault": "Loses position and control descending under load → a slow eccentric builds control, position awareness and muscle/tendon capacity, especially in the off-season."
+    "raw_fault": "Loses position and control descending under load → a slow eccentric builds control, position awareness and muscle/tendon capacity, especially in the off-season.",
+    "est_max_ratio": 0.82
   },
   {
     "name": "Strict press (overhead press)",
@@ -1902,7 +1951,8 @@
     ],
     "contraindications": "Shoulder injury → regress / neutral-grip DB",
     "staple": true,
-    "raw_fault": "Weak overhead lockout and the jerk fails overhead → strict pressing builds the raw overhead pressing strength and shoulder base from which the jerk is expressed."
+    "raw_fault": "Weak overhead lockout and the jerk fails overhead → strict pressing builds the raw overhead pressing strength and shoulder base from which the jerk is expressed.",
+    "est_max_ratio": 0.62
   },
   {
     "name": "Push press",
@@ -1912,8 +1962,8 @@
     "load": {
       "type": "percent",
       "parent": "jerk",
-      "pct_min": 75,
-      "pct_max": 85,
+      "pct_min": 55,
+      "pct_max": 65,
       "raw": "Own push-press max, or ~75–85% of jerk"
     },
     "reps": "3–5 reps",
@@ -1940,7 +1990,8 @@
     ],
     "contraindications": "Shoulder injury",
     "staple": true,
-    "raw_fault": "Weak jerk drive and overhead → the push press overloads the leg-drive-to-overhead pattern heavier than a jerk allows, building drive and lockout strength that feeds the jerk."
+    "raw_fault": "Weak jerk drive and overhead → the push press overloads the leg-drive-to-overhead pattern heavier than a jerk allows, building drive and lockout strength that feeds the jerk.",
+    "est_max_ratio": 0.78
   },
   {
     "name": "Behind-the-neck snatch-grip press",
@@ -1979,7 +2030,8 @@
     ],
     "contraindications": "Shoulder instability / mobility limits → skip",
     "staple": false,
-    "raw_fault": "Weak, unstable overhead in the wide snatch grip and a tight receiving position → snatch-grip BTN pressing builds overhead strength and mobility specific to the snatch lockout."
+    "raw_fault": "Weak, unstable overhead in the wide snatch grip and a tight receiving position → snatch-grip BTN pressing builds overhead strength and mobility specific to the snatch lockout.",
+    "est_max_ratio": null
   },
   {
     "name": "Barbell row (Pendlay / bent-over)",
@@ -2017,7 +2069,8 @@
     ],
     "contraindications": "Acute low-back pain → chest-supported variant",
     "staple": true,
-    "raw_fault": "Weak upper back lets the bar drift and positions collapse under load → heavy rows build the upper-back mass and strength to hold positions in the pull and rack."
+    "raw_fault": "Weak upper back lets the bar drift and positions collapse under load → heavy rows build the upper-back mass and strength to hold positions in the pull and rack.",
+    "est_max_ratio": null
   },
   {
     "name": "Weighted pull-up",
@@ -2052,7 +2105,8 @@
     ],
     "contraindications": "Elbow/shoulder pain → neutral grip / regress",
     "staple": false,
-    "raw_fault": "Weak lats and grip undercut a strong pull and stable overhead → pull-ups build the lat and grip strength that support the pull and overhead positions."
+    "raw_fault": "Weak lats and grip undercut a strong pull and stable overhead → pull-ups build the lat and grip strength that support the pull and overhead positions.",
+    "est_max_ratio": null
   },
   {
     "name": "Romanian deadlift (RDL)",
@@ -2091,7 +2145,8 @@
     ],
     "contraindications": "Acute low-back pain → reduce load/ROM",
     "staple": true,
-    "raw_fault": "Weak posterior chain lets the hips shoot and the back angle fail off the floor → RDLs build the hamstring and back mass/strength to hold pull positions. Emphasized in the off-season, trimmed toward the peak."
+    "raw_fault": "Weak posterior chain lets the hips shoot and the back angle fail off the floor → RDLs build the hamstring and back mass/strength to hold pull positions. Emphasized in the off-season, trimmed toward the peak.",
+    "est_max_ratio": 1.3
   },
   {
     "name": "Good morning",
@@ -2129,7 +2184,8 @@
     ],
     "contraindications": "Acute low-back pain → avoid; keep light",
     "staple": false,
-    "raw_fault": "Back rounds and hips rise early as the erectors/hamstrings fatigue → good mornings build the hip-hinge posterior strength to keep the back angle under pulling load."
+    "raw_fault": "Back rounds and hips rise early as the erectors/hamstrings fatigue → good mornings build the hip-hinge posterior strength to keep the back angle under pulling load.",
+    "est_max_ratio": null
   },
   {
     "name": "Glute-ham raise (GHR)",
@@ -2164,7 +2220,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Weak hamstrings limit extension and knee stability → GHRs build hamstring strength through the knee, supporting a strong finish and healthy knees."
+    "raw_fault": "Weak hamstrings limit extension and knee stability → GHRs build hamstring strength through the knee, supporting a strong finish and healthy knees.",
+    "est_max_ratio": null
   },
   {
     "name": "Back extension (hyperextension)",
@@ -2200,7 +2257,8 @@
     ],
     "contraindications": "Acute low-back pain → reduce ROM",
     "staple": false,
-    "raw_fault": "Erectors fatigue and the back angle collapses deep into pulling volume → back extensions build the erector endurance to hold position late in sessions."
+    "raw_fault": "Erectors fatigue and the back angle collapses deep into pulling volume → back extensions build the erector endurance to hold position late in sessions.",
+    "est_max_ratio": null
   },
   {
     "name": "Weighted front plank",
@@ -2235,7 +2293,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Trunk leaks under the bar in the dip/drive and receiving → anti-extension bracing builds the midline stiffness to transmit force and stay rigid overhead."
+    "raw_fault": "Trunk leaks under the bar in the dip/drive and receiving → anti-extension bracing builds the midline stiffness to transmit force and stay rigid overhead.",
+    "est_max_ratio": null
   },
   {
     "name": "Hanging leg raise / toes-to-bar",
@@ -2267,7 +2326,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Weak trunk control lets the pelvis and ribcage disorganize under load → hanging leg raises build controlled trunk flexion and bracing without a mobile spine."
+    "raw_fault": "Weak trunk control lets the pelvis and ribcage disorganize under load → hanging leg raises build controlled trunk flexion and bracing without a mobile spine.",
+    "est_max_ratio": 0.93
   },
   {
     "name": "Loaded carry (front-rack / farmer)",
@@ -2299,7 +2359,8 @@
     ],
     "contraindications": "Acute low-back pain → reduce load",
     "staple": false,
-    "raw_fault": "Trunk and grip give out holding heavy positions → loaded carries build braced trunk stiffness and grip; the front-rack carry directly loads the clean rack position."
+    "raw_fault": "Trunk and grip give out holding heavy positions → loaded carries build braced trunk stiffness and grip; the front-rack carry directly loads the clean rack position.",
+    "est_max_ratio": null
   },
   {
     "name": "Leg press",
@@ -2330,7 +2391,8 @@
     ],
     "contraindications": "Knee pain → reduce depth/load",
     "staple": false,
-    "raw_fault": "Leg/quad size caps the total but heavy squatting is fatiguing → the leg press adds high-volume quad hypertrophy with low skill and spinal cost, ideal in the off-season."
+    "raw_fault": "Leg/quad size caps the total but heavy squatting is fatiguing → the leg press adds high-volume quad hypertrophy with low skill and spinal cost, ideal in the off-season.",
+    "est_max_ratio": null
   },
   {
     "name": "Leg extension",
@@ -2363,7 +2425,8 @@
     ],
     "contraindications": "Acute patellar pain → reduce ROM/load",
     "staple": false,
-    "raw_fault": "Weak quads/VMO and knees that ache under squat volume → controlled leg extensions build quad mass and, done slow, help patellar-tendon tolerance."
+    "raw_fault": "Weak quads/VMO and knees that ache under squat volume → controlled leg extensions build quad mass and, done slow, help patellar-tendon tolerance.",
+    "est_max_ratio": null
   },
   {
     "name": "Leg curl (seated/lying)",
@@ -2394,7 +2457,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Hamstrings under-built relative to quads → knee-flexion curls add direct hamstring mass the compound lifts under-target, protecting the knee and balancing the leg."
+    "raw_fault": "Hamstrings under-built relative to quads → knee-flexion curls add direct hamstring mass the compound lifts under-target, protecting the knee and balancing the leg.",
+    "est_max_ratio": null
   },
   {
     "name": "Bulgarian split squat",
@@ -2431,7 +2495,8 @@
     ],
     "contraindications": "Knee pain → reduce depth",
     "staple": false,
-    "raw_fault": "Side-to-side leg asymmetry and weak single-leg drive → the Bulgarian split squat builds unilateral leg strength/mass and evens the drive out of the clean."
+    "raw_fault": "Side-to-side leg asymmetry and weak single-leg drive → the Bulgarian split squat builds unilateral leg strength/mass and evens the drive out of the clean.",
+    "est_max_ratio": null
   },
   {
     "name": "Nordic hamstring curl",
@@ -2463,7 +2528,8 @@
     ],
     "contraindications": "Hamstring strain (acute) → avoid",
     "staple": false,
-    "raw_fault": "Hamstring strains and weak eccentric control → the Nordic overloads the hamstring eccentric, the strongest evidence-based reducer of hamstring injury."
+    "raw_fault": "Hamstring strains and weak eccentric control → the Nordic overloads the hamstring eccentric, the strongest evidence-based reducer of hamstring injury.",
+    "est_max_ratio": null
   },
   {
     "name": "Hip thrust",
@@ -2499,7 +2565,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Weak hip extension/glutes leave the finish of the pull soft → hip thrusts build direct glute and hip-extension strength/mass to power extension."
+    "raw_fault": "Weak hip extension/glutes leave the finish of the pull soft → hip thrusts build direct glute and hip-extension strength/mass to power extension.",
+    "est_max_ratio": null
   },
   {
     "name": "Reverse hyperextension",
@@ -2532,7 +2599,8 @@
     ],
     "contraindications": "Acute low-back pain → keep very light/skip",
     "staple": false,
-    "raw_fault": "Low back beaten up by pulling volume → the reverse hyper trains the posterior chain while decompressing the spine, a joint-friendly low-back builder."
+    "raw_fault": "Low back beaten up by pulling volume → the reverse hyper trains the posterior chain while decompressing the spine, a joint-friendly low-back builder.",
+    "est_max_ratio": null
   },
   {
     "name": "GHD back extension",
@@ -2566,7 +2634,8 @@
     ],
     "contraindications": "Acute low-back pain → reduce ROM",
     "staple": false,
-    "raw_fault": "Erectors/glutes/hams fatigue and the back angle collapses in the pull → GHD raises build posterior-chain strength-endurance through a full range to hold positions late."
+    "raw_fault": "Erectors/glutes/hams fatigue and the back angle collapses in the pull → GHD raises build posterior-chain strength-endurance through a full range to hold positions late.",
+    "est_max_ratio": null
   },
   {
     "name": "Chest-supported row",
@@ -2600,7 +2669,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Weak upper back but a low back already taxed by pulls → chest-supported rows add upper-back mass with the torso braced, sparing the spine."
+    "raw_fault": "Weak upper back but a low back already taxed by pulls → chest-supported rows add upper-back mass with the torso braced, sparing the spine.",
+    "est_max_ratio": null
   },
   {
     "name": "Lat pulldown",
@@ -2633,7 +2703,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Lats/upper back need volume weaker athletes can't get from pull-ups → the lat pulldown adds scalable lat hypertrophy supporting the pull and overhead."
+    "raw_fault": "Lats/upper back need volume weaker athletes can't get from pull-ups → the lat pulldown adds scalable lat hypertrophy supporting the pull and overhead.",
+    "est_max_ratio": null
   },
   {
     "name": "Barbell shrug",
@@ -2668,7 +2739,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Weak traps cut the finish of the pull short and struggle to stabilize a heavy bar → heavy shrugs build the traps that complete extension and hold position."
+    "raw_fault": "Weak traps cut the finish of the pull short and struggle to stabilize a heavy bar → heavy shrugs build the traps that complete extension and hold position.",
+    "est_max_ratio": null
   },
   {
     "name": "Dumbbell overhead press",
@@ -2703,7 +2775,8 @@
     ],
     "contraindications": "Shoulder injury → reduce ROM",
     "staple": false,
-    "raw_fault": "Overhead pressing volume and shoulder mass build a bigger, healthier jerk lockout → DB pressing adds unilateral overhead hypertrophy and stability."
+    "raw_fault": "Overhead pressing volume and shoulder mass build a bigger, healthier jerk lockout → DB pressing adds unilateral overhead hypertrophy and stability.",
+    "est_max_ratio": null
   },
   {
     "name": "Lateral raise",
@@ -2734,7 +2807,8 @@
     ],
     "contraindications": "Shoulder impingement → reduce ROM",
     "staple": false,
-    "raw_fault": "Underdeveloped delts destabilize the overhead catch → lateral raises build deltoid mass and the stability that supports a locked-out bar."
+    "raw_fault": "Underdeveloped delts destabilize the overhead catch → lateral raises build deltoid mass and the stability that supports a locked-out bar.",
+    "est_max_ratio": null
   },
   {
     "name": "Face pull",
@@ -2768,7 +2842,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Rounded, forward shoulders from heavy pulling threaten the overhead position → face pulls build rear delts and external rotators, balancing posture and protecting the shoulder overhead."
+    "raw_fault": "Rounded, forward shoulders from heavy pulling threaten the overhead position → face pulls build rear delts and external rotators, balancing posture and protecting the shoulder overhead.",
+    "est_max_ratio": null
   },
   {
     "name": "Band external rotation",
@@ -2801,7 +2876,8 @@
     ],
     "contraindications": "Acute shoulder pain → very light",
     "staple": false,
-    "raw_fault": "Weak rotator cuff undermines a stable overhead lockout → external rotations strengthen the cuff so the shoulder stays healthy and locked overhead."
+    "raw_fault": "Weak rotator cuff undermines a stable overhead lockout → external rotations strengthen the cuff so the shoulder stays healthy and locked overhead.",
+    "est_max_ratio": null
   },
   {
     "name": "Overhead triceps extension",
@@ -2836,7 +2912,8 @@
     ],
     "contraindications": "Elbow pain → reduce ROM",
     "staple": false,
-    "raw_fault": "Jerk fails at lockout because the triceps give out overhead → overhead extensions build elbow-extension strength that finishes the jerk plus triceps mass off-season."
+    "raw_fault": "Jerk fails at lockout because the triceps give out overhead → overhead extensions build elbow-extension strength that finishes the jerk plus triceps mass off-season.",
+    "est_max_ratio": null
   },
   {
     "name": "Triceps pushdown",
@@ -2870,7 +2947,8 @@
     ],
     "contraindications": "Elbow pain → reduce load",
     "staple": false,
-    "raw_fault": "Triceps hypertrophy and lockout endurance for overhead → pushdowns add high-rep triceps volume supporting the jerk lockout with minimal joint stress."
+    "raw_fault": "Triceps hypertrophy and lockout endurance for overhead → pushdowns add high-rep triceps volume supporting the jerk lockout with minimal joint stress.",
+    "est_max_ratio": null
   },
   {
     "name": "Close-grip bench press",
@@ -2904,7 +2982,8 @@
     ],
     "contraindications": "Shoulder injury → reduce ROM/skip",
     "staple": false,
-    "raw_fault": "Weak pressing/triceps undercut the jerk lockout → close-grip bench builds horizontal pressing and triceps strength that transfer to a locked overhead."
+    "raw_fault": "Weak pressing/triceps undercut the jerk lockout → close-grip bench builds horizontal pressing and triceps strength that transfer to a locked overhead.",
+    "est_max_ratio": null
   },
   {
     "name": "Weighted dip",
@@ -2939,7 +3018,8 @@
     ],
     "contraindications": "Shoulder pain at depth → limit ROM",
     "staple": false,
-    "raw_fault": "Triceps and pressing strength for a stable lockout → dips build triceps/chest mass and pressing power supporting the overhead."
+    "raw_fault": "Triceps and pressing strength for a stable lockout → dips build triceps/chest mass and pressing power supporting the overhead.",
+    "est_max_ratio": null
   },
   {
     "name": "Biceps curl",
@@ -2973,7 +3053,8 @@
     ],
     "contraindications": "Distal-biceps/elbow pain → reduce load",
     "staple": false,
-    "raw_fault": "Elbow flexors get strained in the rack/catch and biceps are under-built → curls build elbow-flexor strength that protects the catch position and add arm mass."
+    "raw_fault": "Elbow flexors get strained in the rack/catch and biceps are under-built → curls build elbow-flexor strength that protects the catch position and add arm mass.",
+    "est_max_ratio": null
   },
   {
     "name": "Standing calf raise",
@@ -3010,7 +3091,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Weak calves limit the top of extension and ankle stability → calf raises build the plantarflexors that finish the pull and stabilize the jerk drive and receiving."
+    "raw_fault": "Weak calves limit the top of extension and ankle stability → calf raises build the plantarflexors that finish the pull and stabilize the jerk drive and receiving.",
+    "est_max_ratio": null
   },
   {
     "name": "Tibialis raise",
@@ -3043,7 +3125,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Poor ankle control and weak shins affect the squat/receiving and knee tracking → tibialis raises build the anterior shin for ankle health and cleaner knee tracking."
+    "raw_fault": "Poor ankle control and weak shins affect the squat/receiving and knee tracking → tibialis raises build the anterior shin for ankle health and cleaner knee tracking.",
+    "est_max_ratio": null
   },
   {
     "name": "GHD sit-up",
@@ -3074,7 +3157,8 @@
     ],
     "contraindications": "Low-back pain → limit ROM / regress",
     "staple": false,
-    "raw_fault": "Weak trunk flexion limits bracing under the bar → GHD sit-ups build anterior-chain trunk strength through a full range."
+    "raw_fault": "Weak trunk flexion limits bracing under the bar → GHD sit-ups build anterior-chain trunk strength through a full range.",
+    "est_max_ratio": null
   },
   {
     "name": "Pallof press",
@@ -3107,7 +3191,8 @@
     ],
     "contraindications": "—",
     "staple": false,
-    "raw_fault": "Trunk rotates and leaks under asymmetric load (split jerk, single-arm carries) → the Pallof press builds anti-rotation stiffness to keep the midline rigid."
+    "raw_fault": "Trunk rotates and leaks under asymmetric load (split jerk, single-arm carries) → the Pallof press builds anti-rotation stiffness to keep the midline rigid.",
+    "est_max_ratio": null
   },
   {
     "name": "Box jump",
@@ -3144,7 +3229,8 @@
     ],
     "contraindications": "Achilles/knee/ankle issues → step-ups instead",
     "staple": false,
-    "raw_fault": "Poor rate of force development and reactive leg power → box jumps train fast, powerful triple extension with a soft landing, sharpening explosiveness. Keep submaximal and low-volume for quality."
+    "raw_fault": "Poor rate of force development and reactive leg power → box jumps train fast, powerful triple extension with a soft landing, sharpening explosiveness. Keep submaximal and low-volume for quality.",
+    "est_max_ratio": null
   },
   {
     "name": "Depth jump",
@@ -3181,6 +3267,7 @@
     ],
     "contraindications": "Any lower-limb tendon issue → avoid",
     "staple": false,
-    "raw_fault": "Slow reactive strength and a weak stretch-shortening cycle in advanced athletes → depth jumps train the fast eccentric-to-concentric switch. Low volume, full recovery, on healthy legs only."
+    "raw_fault": "Slow reactive strength and a weak stretch-shortening cycle in advanced athletes → depth jumps train the fast eccentric-to-concentric switch. Low volume, full recovery, on healthy legs only.",
+    "est_max_ratio": null
   }
 ]
