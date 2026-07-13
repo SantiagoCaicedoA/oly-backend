@@ -17,11 +17,34 @@ const DAY_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'satu
 const isPersonalized = (user) => user && user.subscription && user.subscription.tier === 'personalized';
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
+/**
+ * Schedule N training days across the week with NEVER more than 3 in a row — insert a rest
+ * after the 3rd training day (or the 2nd if that's what it takes to fit), honoring the athlete's
+ * preferred rest days where the rule allows. Returns { train:[weekday...], rest:[weekday...] }.
+ */
+function scheduleWeek(count, preferredRest = []) {
+  const restSet = new Set((preferredRest || []).map((d) => String(d).toLowerCase()));
+  const train = [], rest = [];
+  let placed = 0, consec = 0;
+  for (let i = 0; i < 7; i++) {
+    const day = DAY_ORDER[i];
+    const need = count - placed, slotsLeft = 7 - i;
+    if (need <= 0) { rest.push(day); continue; }
+    const mustTrain = need >= slotsLeft; // no room left to rest and still hit the count
+    const mustRest = consec >= 3;        // hard max-3-in-a-row rule
+    let doTrain;
+    if (mustRest) doTrain = false;               // rule wins (may cost a day, which is correct)
+    else if (mustTrain) doTrain = true;
+    else doTrain = !restSet.has(day);            // honor a preferred rest day when we're free to
+    if (doTrain) { train.push(day); placed++; consec++; } else { rest.push(day); consec = 0; }
+  }
+  return { train, rest };
+}
+
 /** Convert a rolling-pipeline week (ordered day-array of %-sets) into the workout-tab
- * `training_days` shape (weekday labels + weight/rpm_percent sets) the mapper expects. */
-function rollingWeekToTrainingDays(week, profile) {
-  const rest = ((profile && profile.availability && profile.availability.preferred_rest_days) || []).map((d) => String(d).toLowerCase());
-  const trainingWeekdays = DAY_ORDER.filter((d) => !rest.includes(d));
+ * `training_days` shape, placing the sessions on the given (max-3-aware) training weekdays.
+ * The AI's per-set intent is carried into coach_prescription so the athlete sees the "why". */
+function rollingWeekToTrainingDays(week, trainingWeekdays) {
   const days = (week && week.days) || [];
   return days.slice(0, trainingWeekdays.length).map((d, i) => ({
     day: i + 1,
@@ -35,6 +58,7 @@ function rollingWeekToTrainingDays(week, profile) {
         weight: typeof s.computed_kg === 'number' ? s.computed_kg : null,
         reps: typeof s.reps === 'number' ? s.reps : null,
         rpm_percent: typeof s.percent === 'number' ? s.percent : null,
+        coach_prescription: typeof s.intent === 'string' ? s.intent : '', // AI's per-set intent → shown
         intent: typeof s.intent === 'string' ? s.intent : '',
       })),
     })),
@@ -53,9 +77,13 @@ async function generateAndSaveRollingWeek(user, options = {}) {
   if (!adv.ok) throw new Error('Rolling generation failed pre-flight: ' + JSON.stringify(adv.preflight && adv.preflight.errors));
 
   const profile = user.profile;
-  const training_days = rollingWeekToTrainingDays(adv.week, profile);
+  const av0 = profile.availability || {};
+  const count = ((adv.week && adv.week.days) || []).length || av0.training_days_per_week || 5;
+  const sched = scheduleWeek(count, av0.preferred_rest_days || []);
+  const training_days = rollingWeekToTrainingDays(adv.week, sched.train);
   const normalized = normalizeWorkoutTabData({ training_days });
-  const days = mapResponseToDays(normalized, profile);
+  // Map with the SCHEDULE's rest days (max-3-aware) so the mapper doesn't re-impose the raw preferences.
+  const days = mapResponseToDays(normalized, { availability: { preferred_rest_days: sched.rest.map(cap) } });
 
   // Coach notes with the real plan slot for "where you are / why".
   const slot = adv.slot || {};
