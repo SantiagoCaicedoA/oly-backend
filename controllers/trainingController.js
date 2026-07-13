@@ -1,6 +1,7 @@
 const WeeklyTraining = require('../models/WeeklyTraining');
 const SetLog = require('../models/SetLog');
 const { generateTrainingResponse } = require('../services/openaiService');
+const { generateProgram } = require('../services/programGenerator');
 const { normalizeWorkoutTabData } = require('../utils/workoutTabSchema');
 
 /**
@@ -268,7 +269,44 @@ async function logActivity(req, res, next) {
   }
 }
 
-module.exports = { generate, getWeek, logActivity, addCustomSet, deleteCustomSet };
+/**
+ * POST /api/training/generate-program
+ * Runs the guarded AI program pipeline: pre-flight input check -> Claude (Sonnet)
+ * writes the full program -> compute kilos -> both linters repair -> (optional) bounce.
+ * This is a TEST/preview endpoint — it returns the program + a repair report but does
+ * not persist anything yet.
+ *
+ * Body (all optional):
+ *   profile : object  — an athlete profile to generate for (defaults to the logged-in user's).
+ *   weeks   : number  — program length (default 12).
+ *   bounce  : boolean — allow the one AI retry on serious flags (default false to stay under the request timeout).
+ * Returns: { success, ok, preflight, program, report, reasoning, self_check, bounced }
+ */
+async function generateFullProgram(req, res, next) {
+  try {
+    const profile = (req.body && req.body.profile) || req.user?.profile || null;
+    if (!profile) {
+      return res.status(400).json({ success: false, message: 'No athlete profile available. Pass "profile" in the body or complete onboarding.' });
+    }
+    const weeks = req.body && Number(req.body.weeks) > 0 ? Number(req.body.weeks) : 12;
+    const noBounce = !(req.body && req.body.bounce === true);
+
+    const result = await generateProgram(profile, { weeks, noBounce });
+
+    if (!result.ok) {
+      return res.status(422).json({
+        success: false,
+        message: 'Pre-flight check failed — the athlete data is incomplete or implausible. Fix these before generating.',
+        preflight: result.preflight,
+      });
+    }
+    return res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { generate, getWeek, logActivity, addCustomSet, deleteCustomSet, generateFullProgram };
 
 /**
  * POST /api/training/week/custom-set
