@@ -186,7 +186,7 @@ function painDeload(program, maxes, painFlags) {
   const capFor = {};
   for (const p of painFlags) {
     const key = String(p.exercise || '').toLowerCase();
-    const cap = p.level === 'Severe' ? 60 : p.level === 'Moderate' ? 70 : 80;
+    const cap = p.level === 'Sharp' ? 60 : p.level === 'Moderate' ? 70 : 80; // app's Pain Level values
     capFor[key] = Math.min(capFor[key] != null ? capFor[key] : 100, cap);
   }
   const flags = [];

@@ -10,23 +10,28 @@
 const SIGNAL_SCORE = { Poor: 1, Acceptable: 2, Good: 3, Excellent: 4 };
 const BAR_SPEED_LABEL = { 1: 'grinding', 2: 'a bit slow', 3: 'fast enough', 4: 'explosive' };
 const POSITION_LABEL = { 1: 'positions breaking down', 2: 'positions shaky', 3: 'positions holding', 4: 'positions locked in' };
-const PAIN_RANK = { Mild: 1, Moderate: 2, Severe: 3 };
+// Pain severity — the EXACT values the app's Pain Level selector emits.
+const PAIN_RANK = { Minor: 1, Moderate: 2, Sharp: 3 };
+const SEVERE_PAIN = 'Sharp';
 
 const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
 const roundedAvg = (a) => { const m = avg(a); return m == null ? null : Math.round(m * 100) / 100; };
 const worstPain = (levels) => levels.reduce((w, l) => ((PAIN_RANK[l] || 0) > (PAIN_RANK[w] || 0) ? l : w), null);
 
-// Map a logged miss direction/location to the corrective DIRECTION (bible fault taxonomy).
-const MISS_CORRECTIVE = [
-  { re: /forward|loop|swing|over.?toes/i, dir: 'misses drifting FORWARD → stay over the bar: pause snatch/clean at knee, no-feet, tempo/halting pulls, RDLs' },
-  { re: /press|lock.?out|overhead|unstable|out$/i, dir: 'PRESS-OUT / unstable overhead → overhead squat, snatch balance, drop snatch, jerk support/pause jerk' },
-  { re: /behind|back(ward)?/i, dir: 'missing BACKWARD → overhead squat, snatch balance, bar-path/tempo work' },
-  { re: /high|soft|shallow|depth|receiv|crash/i, dir: 'catching HIGH / shallow → get under: no-feet, tall, drop snatch, snatch balance, bottom pauses' },
-  { re: /floor|first.?pull|slow.?off|weak.?pull/i, dir: 'weak/slow first pull → deficit pulls, halting/pause pulls, back strength' },
-];
+// Map the app's EXACT miss-capture values (missed_where + where_did_it_fail) to the corrective direction.
+const MISS_CORRECTIVE = {
+  // "MISSED WHERE?" — In front / Behind / Left / Right
+  'in front': 'misses landing IN FRONT → stay over the bar: pause snatch/clean at the knee, no-feet, tempo/halting pulls, RDLs',
+  'behind': 'misses landing BEHIND → control the finish: overhead squat, snatch balance, bar-path/tempo work',
+  'left': 'misses drifting LEFT → overhead stability + symmetry: snatch balance, OHS, unilateral work; check the setup',
+  'right': 'misses drifting RIGHT → overhead stability + symmetry: snatch balance, OHS, unilateral work; check the setup',
+  // "WHERE DID IT FAIL?" — Pull / Turnover / Catch / overhead
+  'pull': 'failing in the PULL → pulling strength + positions: deficit/segment pulls, pause at the knee, RDLs',
+  'turnover': 'failing on the TURNOVER → get under faster: tall/no-feet snatch, high-hang, drop snatch, speed pulls',
+  'catch / overhead': 'failing at the CATCH / overhead → overhead squat, snatch balance, drop snatch, jerk support/pause jerk',
+};
 function missCorrective(direction) {
-  for (const m of MISS_CORRECTIVE) if (m.re.test(String(direction || ''))) return m.dir;
-  return null;
+  return MISS_CORRECTIVE[String(direction || '').toLowerCase().trim()] || null;
 }
 
 /**
@@ -47,8 +52,8 @@ function extractRichSignals(sessions) {
           r.sets++;
           if (set.was_it_a_miss) {
             r.missed++;
-            const md = set.missed_where || set.where_did_it_fail;
-            if (md) r.missDirs.push(md);
+            if (set.missed_where) r.missDirs.push(set.missed_where);
+            if (set.where_did_it_fail) r.missDirs.push(set.where_did_it_fail);
           } else r.made++;
           if (SIGNAL_SCORE[set.bar_speed]) r.barSpeed.push(SIGNAL_SCORE[set.bar_speed]);
           if (SIGNAL_SCORE[set.position_quality]) r.position.push(SIGNAL_SCORE[set.position_quality]);
@@ -74,4 +79,4 @@ function extractRichSignals(sessions) {
   return out;
 }
 
-module.exports = { SIGNAL_SCORE, PAIN_RANK, BAR_SPEED_LABEL, POSITION_LABEL, extractRichSignals, missCorrective, avg, roundedAvg };
+module.exports = { SIGNAL_SCORE, PAIN_RANK, SEVERE_PAIN, BAR_SPEED_LABEL, POSITION_LABEL, extractRichSignals, missCorrective, avg, roundedAvg };
