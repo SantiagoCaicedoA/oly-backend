@@ -140,10 +140,11 @@ async function advanceRollingBlock(user, opts = {}) {
   }
 
   // 2) Adapt maxes from recent logs (skipped for a test profile), then 3) assemble feedback.
-  if (!isTest) { try { await adaptUserMaxes(user); } catch (e) { console.error('adaptUserMaxes failed:', e && e.message); } }
+  let applied = {};
+  if (!isTest) { try { applied = (await adaptUserMaxes(user)) || {}; } catch (e) { console.error('adaptUserMaxes failed:', e && e.message); } }
   const sessions = isTest ? [] : await WeeklyTraining.find({ user: user._id }).sort({ week_start: -1 }).limit(3).lean();
   const maxes = getMaxes(profile);
-  const feedback = assembleFeedback(sessions, opts.checkIn || null, maxes);
+  const feedback = assembleFeedback(sessions, opts.checkIn || null, maxes, applied);
   const { aggregate, evidenceLine } = require('./metrics');
   const evidence = evidenceLine(aggregate(sessions, maxes));
 
