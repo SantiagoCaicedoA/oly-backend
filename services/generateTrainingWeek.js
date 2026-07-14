@@ -112,7 +112,7 @@ async function generateAndSaveRollingWeek(user, options = {}) {
     is_special: slot.is_special, ending: adv.ending, focus: slot.note,
   };
   try {
-    const notes = await generateCoachNotes(profile, days, planContext);
+    const notes = await generateCoachNotes(profile, days, planContext, adv.evidence);
     if (notes) {
       Object.keys(notes).forEach((dayName) => {
         const d = days[dayName];

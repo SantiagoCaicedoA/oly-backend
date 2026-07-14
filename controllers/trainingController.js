@@ -392,7 +392,32 @@ async function regenerateWeek(req, res, next) {
   }
 }
 
-module.exports = { generate, getWeek, logActivity, addCustomSet, deleteCustomSet, generateFullProgram, generateRollingWeek, setTier, regenerateWeek };
+/**
+ * GET /api/training/wrapped
+ * Aggregated training metrics for the athlete — the "Spotify Wrapped" data: tonnage, sessions,
+ * make-rate per lift, PRs, movement quality. Reads all stored weeks.
+ */
+async function getWrapped(req, res, next) {
+  try {
+    const WeeklyTraining = require('../models/WeeklyTraining');
+    const { aggregate } = require('../services/metrics');
+    const sessions = await WeeklyTraining.find({ user: req.user._id }).sort({ week_start: -1 }).limit(60).lean();
+    // Baseline = the athlete's onboarding-snapshot maxes, so PRs show as improvements.
+    const ss = (req.user.profile && req.user.profile.strength_stats) || {};
+    const gv = (o) => (o && typeof o.value === 'number' ? o.value : undefined);
+    const baseline = {
+      snatch: gv(ss.classic && ss.classic.snatch),
+      cj: gv(ss.classic && ss.classic.clean_jerk),
+      back_squat: gv(ss.squat && ss.squat.back_squat),
+      front_squat: gv(ss.squat && ss.squat.front_squat),
+    };
+    return res.status(200).json({ success: true, wrapped: aggregate(sessions, baseline) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { generate, getWeek, logActivity, addCustomSet, deleteCustomSet, generateFullProgram, generateRollingWeek, setTier, regenerateWeek, getWrapped };
 
 /**
  * POST /api/training/week/custom-set

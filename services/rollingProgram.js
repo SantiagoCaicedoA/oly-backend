@@ -96,7 +96,7 @@ function processWeek(rawWeek, slot, maxes, opts = {}) {
   const days = Array.isArray(rawWeek && rawWeek.days) ? rawWeek.days
     : (rawWeek && rawWeek.weeks && rawWeek.weeks[0] && rawWeek.weeks[0].days) || [];
   const program = { weeks: [{ week: (slot && slot.week) || 1, phase: (slot && slot.phase) || 'Base', days }] };
-  const processed = processProgram(program, maxes, { tier: opts.tier, sessionMinutes: opts.sessionMinutes });
+  const processed = processProgram(program, maxes, { tier: opts.tier, sessionMinutes: opts.sessionMinutes, painFlags: opts.painFlags });
   return { week: processed.program.weeks[0], report: processed.report };
 }
 
@@ -108,7 +108,7 @@ async function generateWeek(profile, block, weekIndex, feedback, maxes, opts = {
 
   let raw;
   try { raw = JSON.parse(res.content); } catch (e) { throw new Error('Week generator returned invalid JSON: ' + (e && e.message)); }
-  const out = processWeek(raw, slot, maxes, opts);
+  const out = processWeek(raw, slot, maxes, { ...opts, painFlags: feedback.painFlags });
   return { ...out, reasoning: raw.reasoning, slot, usage: res.usage };
 }
 
@@ -144,6 +144,8 @@ async function advanceRollingBlock(user, opts = {}) {
   const sessions = isTest ? [] : await WeeklyTraining.find({ user: user._id }).sort({ week_start: -1 }).limit(3).lean();
   const maxes = getMaxes(profile);
   const feedback = assembleFeedback(sessions, opts.checkIn || null, maxes);
+  const { aggregate, evidenceLine } = require('./metrics');
+  const evidence = evidenceLine(aggregate(sessions, maxes));
 
   // 4) Build the current week from the plan slot + feedback, through the guard chain.
   const weekIndex = currentWeekIndex(block, now);
@@ -153,7 +155,7 @@ async function advanceRollingBlock(user, opts = {}) {
 
   return {
     ok: true, week_index: weekIndex, tier, plan: block.plan, week: built.week, report: built.report,
-    reasoning: built.reasoning, feedback: feedback.summary,
+    reasoning: built.reasoning, feedback: feedback.summary, evidence,
     // Block metadata for storage + coach-note context:
     block_id: block._id, phase: (built.slot && built.slot.phase) || null, weeks_total: block.weeks_total,
     ending: block.ending, slot: built.slot,

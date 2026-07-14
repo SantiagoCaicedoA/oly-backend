@@ -175,10 +175,38 @@ function lintAndRepair(program, maxes, opts = {}) {
   };
 }
 
-/** Pure end-to-end processing of a raw AI program: compute + full guard chain + load mode. */
+/**
+ * Pain safety backstop — if a movement had pain flagged in recent logs, cap its load hard
+ * (≤75% of the parent) regardless of what the AI wrote. The prompt already asks the AI to
+ * substitute intelligently; this guarantees the load is at least backed off. Safety > everything.
+ */
+function painDeload(program, maxes, painFlags) {
+  if (!Array.isArray(painFlags) || !painFlags.length) return [];
+  // Severity-graded cap: Mild eases the load, Moderate more, Severe backs it right off (substitute).
+  const capFor = {};
+  for (const p of painFlags) {
+    const key = String(p.exercise || '').toLowerCase();
+    const cap = p.level === 'Severe' ? 60 : p.level === 'Moderate' ? 70 : 80;
+    capFor[key] = Math.min(capFor[key] != null ? capFor[key] : 100, cap);
+  }
+  const flags = [];
+  let touched = false;
+  eachExercise(program, (ex) => {
+    const cap = capFor[String(ex.name || '').toLowerCase()];
+    if (cap == null) return;
+    let hit = false;
+    for (const s of ex.sets || []) { if (typeof s.percent === 'number' && s.percent > cap) { s.percent = cap; hit = true; } }
+    if (hit) { touched = true; flags.push({ type: 'pain_deload', exercise: ex.name, cap, note: `${ex.name} capped to ${cap}% — pain flagged here; substitute if it persists.` }); }
+  });
+  if (touched) computeLoads(program, maxes);
+  return flags;
+}
+
+/** Pure end-to-end processing of a raw AI program: compute + full guard chain + pain backstop + load mode. */
 function processProgram(program, maxes, opts = {}) {
   computeLoads(program, maxes);
   const fixes = lintAndRepair(program, maxes, opts);
+  const painFixes = painDeload(program, maxes, opts.painFlags);
   const loadMode = applyLoadMode(program, opts.tier);
   const report = {
     load_mode: loadMode.mode,
@@ -187,13 +215,15 @@ function processProgram(program, maxes, opts = {}) {
       squats_lifted: fixes.squat_repairs.length,
       tier_capped: fixes.tier_caps.length,
       reps_trimmed: fixes.volume_trims.length,
+      pain_deloaded: painFixes.length,
     },
-    // Everything that couldn't be auto-repaired and should bounce back to the AI.
+    // Everything that couldn't be auto-repaired and should bounce back to the AI, plus pain notes.
     warnings: [
       ...fixes.variety_intensity,
       ...fixes.heavy_exposure,
       ...fixes.time_budget,
       ...fixes.progression,
+      ...painFixes,
     ],
     detail: fixes,
   };

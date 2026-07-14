@@ -12,6 +12,8 @@
  * Pure; reuses the existing adapter primitives. No DB, no LLM — unit-testable.
  */
 const { extractLogged, computeMaxAdjustments, readinessScale } = require('./adapter');
+const { extractRichSignals, missCorrective, BAR_SPEED_LABEL, POSITION_LABEL } = require('./trainingSignals');
+const KEY_LIFTS = ['Snatch', 'Clean & Jerk', 'Clean & jerk'];
 
 /** Make-rate per classic lift from logged clean singles vs misses (bible §1E progress signal). */
 function computeMakeRate(logged) {
@@ -52,9 +54,39 @@ function assembleFeedback(sessions, checkIn, maxes) {
     lines.push(`${LIFT_LABEL[lift]} max adjusted ${dir} ${adj.from}→${adj.to}kg (${adj.reason}) — new percentages run off this`);
   }
   if (readiness.note) lines.push(`today's readiness: ${readiness.note} (cap ~${readiness.cap || 'none'}%)`);
+
+  // ---- Rich signals: bar speed, position quality, pain (feedback v2) ----
+  const signals = extractRichSignals(sessions || []);
+  const painFlags = [];
+  for (const [name, sig] of Object.entries(signals)) {
+    if (sig.pain) {
+      painFlags.push({ exercise: name, areas: sig.painAreas, count: sig.painCount, level: sig.painLevel });
+      const sev = sig.painLevel ? `${sig.painLevel.toUpperCase()} pain` : 'pain';
+      const action = sig.painLevel === 'Severe' ? 'REMOVE / substitute this movement' : 'reduce load or substitute';
+      lines.push(`${sev} on ${name}${sig.painAreas.length ? ' (' + sig.painAreas.join(', ') + ')' : ''} — ${action} and check in with the athlete`);
+    }
+    // Miss-direction → the corrective DIRECTION (bible fault taxonomy). Highest exercise-selection signal.
+    if (sig.missDirections && sig.missDirections.length >= 2) {
+      const dir = missCorrective(sig.missDirections[sig.missDirections.length - 1]);
+      if (dir) lines.push(`${name}: ${dir}`);
+    }
+  }
+  for (const name of KEY_LIFTS) {
+    const sig = signals[name];
+    if (!sig) continue;
+    if (sig.barSpeedAvg != null) {
+      const tag = sig.barSpeedAvg >= 3.5 ? ' — moving fast, room to push' : sig.barSpeedAvg < 2.5 ? ' — grinding, hold or ease the load (don\'t just add %)' : '';
+      lines.push(`${name}: bar speed ${BAR_SPEED_LABEL[Math.round(sig.barSpeedAvg)]} (avg ${sig.barSpeedAvg}/4)${tag}`);
+    }
+    if (sig.positionAvg != null) {
+      const tag = sig.positionAvg < 2.5 ? ' — reinforce the corrective, hold the load' : sig.positionAvg >= 3.5 ? ' — corrective is working, can progress' : '';
+      lines.push(`${name}: ${POSITION_LABEL[Math.round(sig.positionAvg)]} (avg ${sig.positionAvg}/4)${tag}`);
+    }
+  }
+
   if (!hasHistory) lines.push('No logged history yet — run the plan as written, slightly conservative, and build a baseline.');
 
-  return { logged, maxAdjust, readiness, makeRate, hasHistory, summary: lines.join('. ') + '.' };
+  return { logged, maxAdjust, readiness, makeRate, signals, painFlags, hasHistory, summary: lines.join('. ') + '.' };
 }
 
 module.exports = { assembleFeedback, computeMakeRate };
