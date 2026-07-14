@@ -12,7 +12,7 @@
  * Pure; reuses the existing adapter primitives. No DB, no LLM — unit-testable.
  */
 const { extractLogged, computeMaxAdjustments, readinessScale } = require('./adapter');
-const { extractRichSignals, missCorrective, BAR_SPEED_LABEL, POSITION_LABEL } = require('./trainingSignals');
+const { extractRichSignals, missCorrective, SEVERE_PAIN, BAR_SPEED_LABEL, POSITION_LABEL } = require('./trainingSignals');
 const KEY_LIFTS = ['Snatch', 'Clean & Jerk', 'Clean & jerk'];
 
 /** Make-rate per classic lift from logged clean singles vs misses (bible §1E progress signal). */
@@ -62,7 +62,7 @@ function assembleFeedback(sessions, checkIn, maxes) {
     if (sig.pain) {
       painFlags.push({ exercise: name, areas: sig.painAreas, count: sig.painCount, level: sig.painLevel });
       const sev = sig.painLevel ? `${sig.painLevel.toUpperCase()} pain` : 'pain';
-      const action = sig.painLevel === 'Severe' ? 'REMOVE / substitute this movement' : 'reduce load or substitute';
+      const action = sig.painLevel === SEVERE_PAIN ? 'REMOVE / substitute this movement' : 'reduce load or substitute';
       lines.push(`${sev} on ${name}${sig.painAreas.length ? ' (' + sig.painAreas.join(', ') + ')' : ''} — ${action} and check in with the athlete`);
     }
     // Miss-direction → the corrective DIRECTION (bible fault taxonomy). Highest exercise-selection signal.
