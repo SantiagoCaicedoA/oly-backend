@@ -37,9 +37,13 @@ const LIFT_LABEL = { snatch: 'snatch', cj: 'clean & jerk', back_squat: 'back squ
  * @param maxes    current stored maxes { snatch, cj, back_squat, front_squat }
  * @returns { logged, maxAdjust, readiness, makeRate, hasHistory, summary }
  */
-function assembleFeedback(sessions, checkIn, maxes) {
+function assembleFeedback(sessions, checkIn, maxes, appliedMaxAdjust = null) {
   const logged = extractLogged(sessions || []);
-  const maxAdjust = computeMaxAdjustments(maxes || {}, logged);
+  // Prefer the adjustments that were ACTUALLY applied (so we can narrate "raised your snatch to X"
+  // even after the profile max was already updated); otherwise recompute.
+  const maxAdjust = appliedMaxAdjust && Object.keys(appliedMaxAdjust).length
+    ? appliedMaxAdjust
+    : computeMaxAdjustments(maxes || {}, logged);
   const readiness = readinessScale(checkIn);
   const makeRate = computeMakeRate(logged);
   const hasHistory = Object.keys(logged).length > 0;
