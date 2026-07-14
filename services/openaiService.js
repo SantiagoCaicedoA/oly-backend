@@ -369,7 +369,7 @@ Respond only with training logic outputs (blocks, sessions, feedback-based adjus
  * @param {object} days - days map from mapResponseToDays ({ monday: {...}, ... })
  * @returns {Promise<object|null>} { monday: { coach_note, key_cues }, ... } or null on failure
  */
-async function generateCoachNotes(profile, days, planContext = null) {
+async function generateCoachNotes(profile, days, planContext = null, evidence = null) {
   if (!hasLLM()) return null;
 
   const bible = await getFullDocumentText('data/coach-note-bible.md');
@@ -416,7 +416,7 @@ ${bible}
 
 # THIS ATHLETE
 ${profileSummary}
-${planBlock}
+${planBlock}${evidence ? `\n# RECENT EVIDENCE (real numbers from their logs — weave ONE in naturally where it fits the note's focus; NEVER force it or list stats)\n${evidence}\n` : ''}
 # THIS WEEK'S SESSIONS (already programmed — do NOT change them; only write the note + cues for each)
 ${daySummaries}
 

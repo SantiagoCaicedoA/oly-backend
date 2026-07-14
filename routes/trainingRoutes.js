@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
-const { generate, getWeek, logActivity, addCustomSet, deleteCustomSet, generateFullProgram, generateRollingWeek, setTier, regenerateWeek } = require('../controllers/trainingController');
+const { generate, getWeek, logActivity, addCustomSet, deleteCustomSet, generateFullProgram, generateRollingWeek, setTier, regenerateWeek, getWrapped } = require('../controllers/trainingController');
 
 // Stored week (from onboarding trigger or Sunday cron) – frontend uses this, no manual generate
 router.get('/week', auth, getWeek);
@@ -14,6 +14,8 @@ router.post('/rolling-week', auth, generateRollingWeek);
 // Dev/self-serve: set own tier (until billing exists); regenerate + store this week via the tier's pipeline.
 router.post('/set-tier', auth, setTier);
 router.post('/regenerate', auth, regenerateWeek);
+// Year-in-review aggregate ("Wrapped").
+router.get('/wrapped', auth, getWrapped);
 // Log activity (update weight/reps/completion for a day)
 router.patch('/log', auth, logActivity);
 

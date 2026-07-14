@@ -7,8 +7,11 @@
  * Also turns a daily check-in into a readiness scale for serve-time day adjustment.
  * Pure math is exported for testing; DB access is lazy so this file loads without mongoose.
  */
+const { extractRichSignals } = require('./trainingSignals');
+
 const r25 = (w) => Math.round(w / 2.5) * 2.5;
 const e1rm = (weight, reps) => weight * (1 + reps / 30); // Epley (bible 9H)
+const VELOCITY_UP = 0.02; // velocity-informed raise is small + conservative
 
 const CAP_UP = 0.04;   // classic single may raise the max at most +4% per event
 const HEAL = 0.03;     // down-heal shaves 3%
@@ -87,6 +90,24 @@ function computeMaxAdjustments(maxes, logged) {
   return out;
 }
 
+/**
+ * Pure: velocity-informed max raise. When the classic-lift bar is consistently explosive at load
+ * with no misses, the true max is under-rated — nudge it up a small, capped amount WITHOUT maxing
+ * (bible: develop, don't test). Only ever raises; never lowers (misses handle that).
+ */
+function velocityAdjustments(signals, maxes) {
+  const LIFT = { Snatch: 'snatch', 'Clean & Jerk': 'cj', 'Clean & jerk': 'cj' };
+  const out = {};
+  for (const [name, lift] of Object.entries(LIFT)) {
+    const sig = signals[name], cur = maxes[lift];
+    if (!sig || !cur || out[lift]) continue;
+    if (sig.barSpeedAvg != null && sig.barSpeedAvg >= 3.5 && sig.made >= 3 && sig.missed === 0) {
+      out[lift] = { from: cur, to: r25(cur * (1 + VELOCITY_UP)), reason: 'bar speed consistently explosive at load — velocity-informed raise' };
+    }
+  }
+  return out;
+}
+
 /** Pure: a daily check-in -> a readiness scale + intensity cap for that day. */
 function readinessScale(checkIn) {
   if (!checkIn) return { scale: 1, cap: null, note: null };
@@ -122,7 +143,11 @@ async function adaptUserMaxes(user, options = {}) {
   const weeks = options.weeks || 3;
   const sessions = await WeeklyTraining.find({ user: user._id }).sort({ week_start: -1 }).limit(weeks).lean();
   const logged = extractLogged(sessions);
-  const adjustments = computeMaxAdjustments(getMaxes(user.profile), logged);
+  const maxes = getMaxes(user.profile);
+  const adjustments = computeMaxAdjustments(maxes, logged);
+  // Velocity-informed raise for any lift not already moved by a made single/miss.
+  const velo = velocityAdjustments(extractRichSignals(sessions), maxes);
+  for (const [lift, adj] of Object.entries(velo)) if (!adjustments[lift]) adjustments[lift] = adj;
   if (Object.keys(adjustments).length) {
     applyToProfile(user.profile, adjustments);
     user.markModified('profile.strength_stats');
@@ -131,4 +156,4 @@ async function adaptUserMaxes(user, options = {}) {
   return adjustments;
 }
 
-module.exports = { e1rm, liftKeyFor, extractLogged, computeMaxAdjustments, readinessScale, applyToProfile, adaptUserMaxes };
+module.exports = { e1rm, liftKeyFor, extractLogged, computeMaxAdjustments, velocityAdjustments, readinessScale, applyToProfile, adaptUserMaxes };
