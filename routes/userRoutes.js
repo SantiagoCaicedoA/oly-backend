@@ -2,7 +2,19 @@ const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
 const auth = require('../middleware/auth');
+const { authLimiter } = require('../middleware/rateLimiters');
 const { body, validationResult } = require('express-validator');
+
+// Only the account owner may modify/delete an account.
+const requireSelf = (req, res, next) => {
+  if (String(req.user._id) !== String(req.params.id)) {
+    return res.status(403).json({
+      success: false,
+      message: 'You can only modify your own account.',
+    });
+  }
+  next();
+};
 
 // Validation middleware – returns consistent { success: false, message, errors }
 const validate = (req, res, next) => {
@@ -46,24 +58,28 @@ const signinValidation = [
 ];
 
 // Routes
-router.get('/', userController.getAllUsers.bind(userController));
-router.post('/signin', signinValidation, validate, userController.signin.bind(userController));
+router.get('/', auth, userController.getAllUsers.bind(userController));
+router.post('/signin', authLimiter, signinValidation, validate, userController.signin.bind(userController));
 router.get('/me', auth, userController.getMe.bind(userController));
 router.get('/check-username', userController.checkUsername.bind(userController));
-router.get('/:id', userController.getUserById.bind(userController));
-// Signup: POST with name, email, password only
+router.get('/:id', auth, userController.getUserById.bind(userController));
+// Signup: POST with name, email, password only (public, rate-limited)
 router.post(
   '/',
+  authLimiter,
   createUserValidation,
   validate,
   userController.createUser.bind(userController)
 );
+// Update/delete: owner only
 router.put(
   '/:id',
+  auth,
+  requireSelf,
   updateUserValidation,
   validate,
   userController.updateUser.bind(userController)
 );
-router.delete('/:id', userController.deleteUser.bind(userController));
+router.delete('/:id', auth, requireSelf, userController.deleteUser.bind(userController));
 
 module.exports = router;

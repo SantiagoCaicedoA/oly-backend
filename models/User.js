@@ -134,8 +134,10 @@ const userSchema = new Schema(
 
 // Encrypt password using bcrypt
 userSchema.pre('save', async function (next) {
+  // IMPORTANT: must return here — without it, execution falls through and
+  // re-hashes the already-hashed password on every save (breaking login).
   if (!this.isModified('password')) {
-    next();
+    return next();
   }
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
 const auth = require('../middleware/auth');
+const { authLimiter } = require('../middleware/rateLimiters');
 
 const { body } = require('express-validator');
 
@@ -25,8 +26,8 @@ const validate = (req, res, next) => {
     next();
 };
 
-router.post('/signin', signinValidation, validate, userController.signin.bind(userController));
-router.post('/signup', createUserValidation, validate, userController.createUser.bind(userController));
-router.post('/refresh', userController.refreshToken.bind(userController));
+router.post('/signin', authLimiter, signinValidation, validate, userController.signin.bind(userController));
+router.post('/signup', authLimiter, createUserValidation, validate, userController.createUser.bind(userController));
+router.post('/refresh', authLimiter, userController.refreshToken.bind(userController));
 
 module.exports = router;
