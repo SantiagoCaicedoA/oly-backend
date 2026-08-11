@@ -3,6 +3,7 @@ const fs = require('fs');
 const Post = require('../models/Post');
 const Like = require('../models/Like');
 const Comment = require('../models/Comment');
+const Follow = require('../models/Follow');
 const { uploadPostVideo, uploadPostThumbnail } = require('../services/s3Service');
 
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'images');
@@ -238,12 +239,18 @@ class PostController {
   }
 
   /**
-   * Get all posts from all users (feed). Optional filtering by status.
-   * Query params: status, page, limit
+   * Get posts (feed). Optional filtering by status.
+   * Query params: status, page, limit, feed
+   *   feed=friends -> posts from people I follow + my own (the Home feed).
+   *                   If page 1 comes back thin (new user, few follows), the server
+   *                   tops it up with recent community posts marked is_suggested:true,
+   *                   so the Home feed never feels dead (discovery fallback).
+   *   feed=mine    -> only my own shared posts
+   *   feed=all     -> everyone's shared posts (default; discovery / backward compatible)
    */
   async getPosts(req, res, next) {
     try {
-      const { status, page = 1, limit = 10 } = req.query;
+      const { status, page = 1, limit = 10, feed = 'all' } = req.query;
 
       const filter = {};
       if (status) {
@@ -253,15 +260,42 @@ class PostController {
       // Only return posts that are shared with friends (not private)
       filter.visibility = { $in: ['SHARED_WITH_FRIENDS'] };
 
+      // Friends feed: people I follow + me. Mine: just me.
+      let friendIds = null;
+      if (feed === 'friends') {
+        const edges = await Follow.find({ follower: req.user._id }).select('following').lean();
+        friendIds = edges.map((e) => e.following);
+        friendIds.push(req.user._id);
+        filter.user = { $in: friendIds };
+      } else if (feed === 'mine') {
+        filter.user = req.user._id;
+      }
+
       const pageNum = Math.max(1, parseInt(page) || 1);
       const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 10));
       const skip = (pageNum - 1) * limitNum;
 
-      const posts = await Post.find(filter)
+      let posts = await Post.find(filter)
         .sort({ createdAt: -1 })
         .limit(limitNum)
         .skip(skip)
         .populate('user', 'name profile_image_url profile.country');
+
+      // Discovery fallback: on page 1 of the friends feed, if there aren't enough posts
+      // from followed athletes, top up with recent community posts (marked is_suggested)
+      // so a new user's Home feed is never empty. Only page 1 — pagination stays simple.
+      const suggestedIds = new Set();
+      if (feed === 'friends' && pageNum === 1 && posts.length < limitNum) {
+        const backfill = await Post.find({
+          ...filter,
+          user: { $nin: friendIds },
+        })
+          .sort({ createdAt: -1 })
+          .limit(limitNum - posts.length)
+          .populate('user', 'name profile_image_url profile.country');
+        backfill.forEach((p) => suggestedIds.add(p._id.toString()));
+        posts = posts.concat(backfill);
+      }
 
       // Get like counts and comment counts for all posts efficiently
       const postIds = posts.map(p => p._id);
@@ -294,6 +328,7 @@ class PostController {
           likeCount: likeCountMap.get(postId) || 0,
           commentCount: commentCountMap.get(postId) || 0,
           isLiked: likedPostIds.has(postId),
+          is_suggested: suggestedIds.has(postId), // discovery-fallback post (not from someone you follow)
         };
       });
 
