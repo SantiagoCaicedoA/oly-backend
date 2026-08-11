@@ -112,11 +112,12 @@ oly-backend/
 - **User Authentication**: JWT-based signup/signin with refresh tokens
 - **Athlete Profiles**: Comprehensive onboarding with strength stats, equipment, preferences
 - **AI Training Generation**: OpenAI-powered weekly training plans based on athlete profiles
-- **Social Features**: Posts with videos/images, likes, comments, visibility controls
+- **Social Features**: Posts with videos/images, likes, comments, visibility controls, follow system + friends feed
 - **Video Management**: AWS S3 integration for video uploads and storage
 - **Training Logging**: Detailed set logging with custom exercises
 - **Daily Check-ins**: Health and training status monitoring with AI adjustments
 - **Automated Scheduling**: Cron jobs for training generation and completion tracking
+  - ⚠️ **Note for the Anthropic switch:** `server.js` only schedules the Sunday/daily crons when `OPENAI_API_KEY` is set. When fully switching to Anthropic (removing `OPENAI_API_KEY`), change that guard or week generation silently stops.
 
 ## Setup Instructions
 
@@ -209,7 +210,7 @@ Profile data is stored **inside the User document** (`user.profile`), so one rea
 ### Posts (`/api/posts`) (auth: `x-user-id` header)
 Social media posts with video/image support, likes, and comments.
 - `POST /api/posts` - Create new post (multipart form: video required, image optional)
-- `GET /api/posts` - Get all posts (with pagination and filtering)
+- `GET /api/posts` - Get posts (pagination + filtering). `?feed=friends` returns posts from people you follow + your own (the Home feed) — if page 1 is thin, the server tops it up with recent community posts flagged `is_suggested: true` so new users never see an empty feed; `?feed=mine` returns only your own; default (`all`) returns everyone's shared posts (discovery)
 - `GET /api/posts/:id` - Get post by ID
 - `PUT /api/posts/:id` - Update post
 - `DELETE /api/posts/:id` - Delete post
@@ -218,6 +219,14 @@ Social media posts with video/image support, likes, and comments.
 - `POST /api/posts/:id/comments` - Add comment to post
 - `GET /api/posts/:id/comments` - Get post comments
 - `DELETE /api/posts/:id/comments/:commentId` - Delete comment
+
+### Follow (`/api/follow`) (auth required)
+The social graph: follow athletes to build your friends feed.
+- `POST /api/follow/:userId` - Follow a user (idempotent)
+- `DELETE /api/follow/:userId` - Unfollow a user (idempotent)
+- `GET /api/follow/followers` - List followers (`?userId=` for another user's; defaults to you). Each entry includes `isFollowing` (whether you follow them back)
+- `GET /api/follow/following` - List who a user follows (`?userId=`; defaults to you)
+- `GET /api/follow/status/:userId` - Relationship + counts: `{ isFollowing, isFollowedBy, followers_count, following_count }` — drives the Follow button and profile header counts
 
 ### Videos (`/api/videos`) (auth: `x-user-id` header)
 Video management with AWS S3 integration.
