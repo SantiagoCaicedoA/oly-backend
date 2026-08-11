@@ -43,4 +43,9 @@ const PostSchema = new Schema(
   { timestamps: true }
 );
 
+// Feed queries: filter by visibility/status (+ user for feed=friends/mine), sort by newest.
+// Without these every feed request is a full collection scan that slows as posts grow.
+PostSchema.index({ visibility: 1, status: 1, createdAt: -1 });
+PostSchema.index({ user: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Post', PostSchema);
