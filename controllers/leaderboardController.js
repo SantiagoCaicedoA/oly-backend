@@ -176,11 +176,11 @@ async function getLeaderboard(req, res) {
     const entries = await BoardEntry.find(query).sort(sort).limit(params.limit).lean();
 
     // Rank of the first row under THESE filters. Paginated pages get it for
-    // free from the cursor (which carries the next rank); page 1 computes it
-    // with the parallel index-only branch counts. Filtered boards work
-    // identically — materialized ranks are never consulted here.
+    // free from the cursor (which always carries the next rank); page 1
+    // computes it with the parallel index-only branch counts. Filtered
+    // boards work identically — materialized ranks are never consulted here.
     let startRank = 1;
-    if (cur && cur.nextRank != null) {
+    if (cur) {
       startRank = cur.nextRank;
     } else if (entries.length > 0) {
       const first = entries[0];

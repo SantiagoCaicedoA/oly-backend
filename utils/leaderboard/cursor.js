@@ -1,32 +1,41 @@
 /**
  * Cursor pagination for board queries — never offset-based.
  *
- * The cursor is the (metric value, tie-break date, user id) triple of the
- * last row served, matching the index order (value desc, date asc, user
- * asc), so page N+1 resumes exactly where page N stopped regardless of
- * concurrent inserts, and the walk stays inside the index.
+ * The cursor is the (metric value, tie-break date, user id, next rank)
+ * 4-tuple of the last row served, matching the index order (value desc,
+ * date asc, user asc), so page N+1 resumes exactly where page N stopped
+ * regardless of concurrent inserts, and the walk stays inside the index.
  */
 
-function encodeCursor(value, tieDateMs, userId, nextRank = null) {
+function encodeCursor(value, tieDateMs, userId, nextRank) {
   return Buffer.from(
     JSON.stringify([value, tieDateMs, String(userId), nextRank])
   ).toString('base64url');
 }
 
+/**
+ * A cursor is the 4-tuple (value, tieDateMs, userId, nextRank) — the sort
+ * position of the last row served plus the rank the next page starts at,
+ * so paginated pages never need a rank count: one query per page.
+ *
+ * KNOWN EDGE (disclosed, accepted): nextRank is derived state. A page
+ * rendered from an old cursor shows ranks as of when the cursor was
+ * minted; lifts landing mid-scroll shift the board underneath it. Low
+ * stakes — rows are shifting anyway and refetch-on-focus resets — but it
+ * is a property of the scheme, not an accident. A cursor is only valid
+ * for the exact filter set that minted it.
+ *
+ * Anything that isn't a well-formed 4-tuple decodes to null and the
+ * request is served as page 1. No legacy formats: nothing has shipped.
+ */
 function decodeCursor(cursor) {
   try {
-    const [value, tieDateMs, userId, nextRank] = JSON.parse(
-      Buffer.from(String(cursor), 'base64url').toString('utf8')
-    );
+    const parsed = JSON.parse(Buffer.from(String(cursor), 'base64url').toString('utf8'));
+    if (!Array.isArray(parsed) || parsed.length !== 4) return null;
+    const [value, tieDateMs, userId, nextRank] = parsed;
     if (typeof value !== 'number' || typeof tieDateMs !== 'number' || !userId) return null;
-    // The cursor carries the next page's starting rank, so paginated pages
-    // never need a rank count at all — one query per page, not two.
-    return {
-      value,
-      tieDateMs,
-      userId,
-      nextRank: typeof nextRank === 'number' ? nextRank : null,
-    };
+    if (typeof nextRank !== 'number' || !Number.isFinite(nextRank) || nextRank < 1) return null;
+    return { value, tieDateMs, userId, nextRank };
   } catch {
     return null;
   }
