@@ -52,9 +52,22 @@ function parseBoardParams(query) {
   return { lift, scope, sex, age, country, weightClass, limit };
 }
 
-/** Resolve scope param to a scopeKey ("S1" | "alltime"). */
+/**
+ * Resolve scope param to a scopeKey ("S1" | "alltime").
+ *
+ * The active season changes ~4 times a YEAR, so it is cached in-process for
+ * 60s instead of being a per-request query — on the hot path this removes
+ * one DB round-trip from every single board/me/card call. Worst case after
+ * a season transition: 60s of the old answer, which the 7-day grace period
+ * makes harmless.
+ */
+let seasonCache = { value: null, expiresAt: 0 };
 async function resolveScopeKey(scope) {
   if (scope === 'alltime') return { scopeKey: 'alltime', season: null };
+  if (seasonCache.expiresAt > Date.now()) {
+    const season = seasonCache.value;
+    return { scopeKey: season ? season.key : 'alltime', season };
+  }
   const now = new Date();
   // A season serves the board through its grace period (until snapshotAt).
   const season = await Season.findOne({
@@ -63,6 +76,7 @@ async function resolveScopeKey(scope) {
   })
     .sort({ startsAt: -1 })
     .lean();
+  seasonCache = { value: season, expiresAt: Date.now() + 60 * 1000 };
   return { scopeKey: season ? season.key : 'alltime', season };
 }
 
@@ -316,13 +330,16 @@ async function getAthleteCard(req, res) {
       entry.totalSnatchLift,
       entry.totalCleanLift,
     ].filter(Boolean);
-    const lifts = await Lift.find({ _id: { $in: liftIds } })
-      .select('liftType weightKg bodyweightKg liftDate videoUrl pendingReview')
-      .lean();
+    // Independent lookups run in parallel — the card is one round-trip wide,
+    // not a sequential chain (matters on high-latency connections).
+    const [lifts, following] = await Promise.all([
+      Lift.find({ _id: { $in: liftIds } })
+        .select('liftType weightKg bodyweightKg liftDate videoUrl pendingReview')
+        .lean(),
+      Follow.exists({ follower: req.user._id, following: entry.user }),
+    ]);
     const byId = Object.fromEntries(lifts.map((l) => [String(l._id), l]));
     const pick = (id) => (id ? byId[String(id)] || null : null);
-
-    const following = await Follow.exists({ follower: req.user._id, following: entry.user });
 
     return res.json({
       season: seasonMeta(season),

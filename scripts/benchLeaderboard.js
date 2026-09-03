@@ -172,11 +172,16 @@ async function main() {
       || await BoardEntry.findOne(filter).lean();
     let countStages = [], countIndexes = [], countDocsExamined = null, keysExamined = null;
     if (mid) {
-      const countPlanRaw = await BoardEntry.find({
-        ...filter,
-        ...betterThanPredicate(m.field, m.tie, mid[m.field], mid[m.tie], mid.user),
-      })
-        .countDocuments()
+      const countPlanRaw = await BoardEntry.collection
+        .aggregate([
+          {
+            $match: {
+              ...filter,
+              ...betterThanPredicate(m.field, m.tie, mid[m.field], mid[m.tie], mid.user),
+            },
+          },
+          { $count: 'n' },
+        ])
         .explain('executionStats');
       const countPlan = explainRoot(countPlanRaw);
       const w = countPlan.queryPlanner && countPlan.queryPlanner.winningPlan;
