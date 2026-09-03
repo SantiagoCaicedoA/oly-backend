@@ -7,17 +7,26 @@
  * concurrent inserts, and the walk stays inside the index.
  */
 
-function encodeCursor(value, tieDateMs, userId) {
-  return Buffer.from(JSON.stringify([value, tieDateMs, String(userId)])).toString('base64url');
+function encodeCursor(value, tieDateMs, userId, nextRank = null) {
+  return Buffer.from(
+    JSON.stringify([value, tieDateMs, String(userId), nextRank])
+  ).toString('base64url');
 }
 
 function decodeCursor(cursor) {
   try {
-    const [value, tieDateMs, userId] = JSON.parse(
+    const [value, tieDateMs, userId, nextRank] = JSON.parse(
       Buffer.from(String(cursor), 'base64url').toString('utf8')
     );
     if (typeof value !== 'number' || typeof tieDateMs !== 'number' || !userId) return null;
-    return { value, tieDateMs, userId };
+    // The cursor carries the next page's starting rank, so paginated pages
+    // never need a rank count at all — one query per page, not two.
+    return {
+      value,
+      tieDateMs,
+      userId,
+      nextRank: typeof nextRank === 'number' ? nextRank : null,
+    };
   } catch {
     return null;
   }
@@ -40,16 +49,39 @@ function cursorPredicate(metricField, tieField, cur) {
 
 /**
  * "Strictly better than this row" predicate — used for rank counts
- * (rank = betterCount + 1) under any filter set, walking the covered index.
+ * (rank = betterCount + 1) under any filter set.
+ *
+ * NOTE: as a single $or, Mongo's OR-plan FETCHes documents, breaking the
+ * covered-count property (review finding #1, observed empirically in the
+ * phase-1 bench: docsExamined=50). Prefer betterThanBranches below, which
+ * asks the same question as three simple single-range counts — each one
+ * index-only — summed by the caller. Kept for the paginated-page predicate
+ * composition test and reference.
  */
 function betterThanPredicate(metricField, tieField, value, tieDate, userId) {
   return {
-    $or: [
-      { [metricField]: { $gt: value } },
-      { [metricField]: value, [tieField]: { $lt: tieDate } },
-      { [metricField]: value, [tieField]: tieDate, user: { $lt: userId } },
-    ],
+    $or: betterThanBranches(metricField, tieField, value, tieDate, userId),
   };
 }
 
-module.exports = { encodeCursor, decodeCursor, cursorPredicate, betterThanPredicate };
+/**
+ * The same "strictly better" question as three simple predicates. Each is a
+ * tight range on the compound index (equality prefix + one range), so each
+ * count stays inside the index — zero documents examined. Run them in
+ * parallel and sum.
+ */
+function betterThanBranches(metricField, tieField, value, tieDate, userId) {
+  return [
+    { [metricField]: { $gt: value } },
+    { [metricField]: value, [tieField]: { $lt: tieDate } },
+    { [metricField]: value, [tieField]: tieDate, user: { $lt: userId } },
+  ];
+}
+
+module.exports = {
+  encodeCursor,
+  decodeCursor,
+  cursorPredicate,
+  betterThanPredicate,
+  betterThanBranches,
+};
