@@ -8,7 +8,7 @@ const {
   encodeCursor,
   decodeCursor,
   cursorPredicate,
-  betterThanPredicate,
+  betterThanBranches,
 } = require('../utils/leaderboard/cursor');
 const { getCached, setCached } = require('../utils/leaderboard/boardCache');
 
@@ -132,6 +132,19 @@ function entryToRow(entry, lift, rank) {
   };
 }
 
+/**
+ * rank - 1 (the count of strictly-better rows) under any filter set, as
+ * three parallel index-only counts (see betterThanBranches). Zero documents
+ * examined — the property the design doc's §4.2 promises.
+ */
+async function betterCount(filter, m, value, tieDate, userId) {
+  const branches = betterThanBranches(m.field, m.tie, value, tieDate, userId);
+  const counts = await Promise.all(
+    branches.map((b) => BoardEntry.countDocuments({ ...filter, ...b }))
+  );
+  return counts.reduce((a, b) => a + b, 0);
+}
+
 function seasonMeta(season) {
   if (!season) return null;
   return { key: season.key, label: season.label, endsAt: season.endsAt, status: season.status };
@@ -162,17 +175,17 @@ async function getLeaderboard(req, res) {
 
     const entries = await BoardEntry.find(query).sort(sort).limit(params.limit).lean();
 
-    // Rank of the first row under THESE filters: one covered count, then
-    // increment down the page. Works identically for filtered boards, where
-    // materialized ranks don't apply.
+    // Rank of the first row under THESE filters. Paginated pages get it for
+    // free from the cursor (which carries the next rank); page 1 computes it
+    // with the parallel index-only branch counts. Filtered boards work
+    // identically — materialized ranks are never consulted here.
     let startRank = 1;
-    if (entries.length > 0) {
+    if (cur && cur.nextRank != null) {
+      startRank = cur.nextRank;
+    } else if (entries.length > 0) {
       const first = entries[0];
-      const better = await BoardEntry.countDocuments({
-        ...filter,
-        ...betterThanPredicate(m.field, m.tie, first[m.field], first[m.tie], first.user),
-      });
-      startRank = better + 1;
+      startRank =
+        (await betterCount(filter, m, first[m.field], first[m.tie], first.user)) + 1;
     }
 
     const rows = entries.map((e, i) => entryToRow(e, params.lift, startRank + i));
@@ -183,7 +196,12 @@ async function getLeaderboard(req, res) {
       entries: rows,
       nextCursor:
         entries.length === params.limit && last
-          ? encodeCursor(last[m.field], new Date(last[m.tie]).getTime(), last.user)
+          ? encodeCursor(
+              last[m.field],
+              new Date(last[m.tie]).getTime(),
+              last.user,
+              startRank + entries.length
+            )
           : null,
     };
 
@@ -232,10 +250,7 @@ async function getMyRank(req, res) {
     const filter = boardFilter({ ...params, scopeKey });
     // Provisional entries are excluded from `filter` by design; a
     // provisional viewer gets a would-be rank against the live board.
-    const better = await BoardEntry.countDocuments({
-      ...filter,
-      ...betterThanPredicate(m.field, m.tie, entry[m.field], entry[m.tie], entry.user),
-    });
+    const better = await betterCount(filter, m, entry[m.field], entry[m.tie], entry.user);
 
     return res.json({
       season: seasonMeta(season),

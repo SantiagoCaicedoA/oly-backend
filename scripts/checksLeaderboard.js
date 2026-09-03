@@ -61,10 +61,25 @@ check('junior filter is a birth-year range', () =>
   assert.deepStrictEqual(birthYearPredicate('junior', 2026), { birthYear: { $gte: 2006 } }));
 
 // --- cursor ----------------------------------------------------------------
-const { encodeCursor, decodeCursor, betterThanPredicate } = require('../utils/leaderboard/cursor');
-check('cursor round-trips', () => {
-  const c = decodeCursor(encodeCursor(212, 1725000000000, '650000000000000000000001'));
-  assert.deepStrictEqual(c, { value: 212, tieDateMs: 1725000000000, userId: '650000000000000000000001' });
+const { encodeCursor, decodeCursor, betterThanPredicate, betterThanBranches } = require('../utils/leaderboard/cursor');
+check('cursor round-trips, carrying the next rank', () => {
+  const c = decodeCursor(encodeCursor(212, 1725000000000, '650000000000000000000001', 51));
+  assert.deepStrictEqual(c, {
+    value: 212, tieDateMs: 1725000000000,
+    userId: '650000000000000000000001', nextRank: 51,
+  });
+});
+check('legacy 3-part cursor still decodes (nextRank null)', () => {
+  const legacy = Buffer.from(JSON.stringify([212, 1725000000000, 'u1'])).toString('base64url');
+  const c = decodeCursor(legacy);
+  assert.strictEqual(c.nextRank, null);
+  assert.strictEqual(c.value, 212);
+});
+check('branch counts equal the $or predicate, decomposed', () => {
+  const branches = betterThanBranches('totalKg', 'totalAchievedAt', 212, new Date(0), 'u1');
+  const orPred = betterThanPredicate('totalKg', 'totalAchievedAt', 212, new Date(0), 'u1');
+  assert.deepStrictEqual(orPred.$or, branches);
+  assert.strictEqual(branches.length, 3);
 });
 check('garbage cursor decodes to null, never throws', () => {
   assert.strictEqual(decodeCursor('not-a-cursor!!'), null);

@@ -89,7 +89,7 @@ async function main() {
   // Part 1 — explain() per board shape: winning index name + covered counts
   // -------------------------------------------------------------------------
   const { boardFilter } = require('../controllers/leaderboardController');
-  const { betterThanPredicate } = require('../utils/leaderboard/cursor');
+  const { betterThanBranches } = require('../utils/leaderboard/cursor');
 
   const shapes = [
     { name: 'total board (hot partition, COL)', lift: 'total', expectIndex: 'board_total',
@@ -172,27 +172,28 @@ async function main() {
       || await BoardEntry.findOne(filter).lean();
     let countStages = [], countIndexes = [], countDocsExamined = null, keysExamined = null;
     if (mid) {
-      const countPlanRaw = await BoardEntry.collection
-        .aggregate([
-          {
-            $match: {
-              ...filter,
-              ...betterThanPredicate(m.field, m.tie, mid[m.field], mid[m.tie], mid.user),
-            },
-          },
-          { $count: 'n' },
-        ])
-        .explain('executionStats');
-      const countPlan = explainRoot(countPlanRaw);
-      const w = countPlan.queryPlanner && countPlan.queryPlanner.winningPlan;
-      countStages = [...collectStages(w)];
-      countIndexes = [...findIndexNames(w)];
-      countDocsExamined = countPlan.executionStats
-        ? countPlan.executionStats.totalDocsExamined
-        : null;
-      keysExamined = countPlan.executionStats
-        ? countPlan.executionStats.totalKeysExamined
-        : null;
+      // Explain each of the three parallel branch counts the API actually
+      // runs (betterThanBranches) and sum: covered means the TOTAL docs
+      // examined across all branches is zero.
+      countDocsExamined = 0;
+      keysExamined = 0;
+      const stagesAll = new Set();
+      const indexesAll = new Set();
+      for (const branch of betterThanBranches(m.field, m.tie, mid[m.field], mid[m.tie], mid.user)) {
+        const raw = await BoardEntry.collection
+          .aggregate([{ $match: { ...filter, ...branch } }, { $count: 'n' }])
+          .explain('executionStats');
+        const plan = explainRoot(raw);
+        const w = plan.queryPlanner && plan.queryPlanner.winningPlan;
+        collectStages(w, stagesAll);
+        findIndexNames(w, indexesAll);
+        if (plan.executionStats) {
+          countDocsExamined += plan.executionStats.totalDocsExamined;
+          keysExamined += plan.executionStats.totalKeysExamined;
+        }
+      }
+      countStages = [...stagesAll];
+      countIndexes = [...indexesAll];
     }
 
     const pass =
