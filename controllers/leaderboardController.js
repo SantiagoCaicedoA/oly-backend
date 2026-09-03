@@ -55,7 +55,7 @@ function parseBoardParams(query) {
 /**
  * Resolve scope param to a scopeKey ("S1" | "alltime").
  *
- * The active season changes ~4 times a YEAR, so it is cached in-process for
+ * The active season changes 3 times a YEAR (4-month seasons), so it is cached in-process for
  * 60s instead of being a per-request query — on the hot path this removes
  * one DB round-trip from every single board/me/card call. Worst case after
  * a season transition: 60s of the old answer, which the 7-day grace period
