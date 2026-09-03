@@ -69,11 +69,15 @@ check('cursor round-trips, carrying the next rank', () => {
     userId: '650000000000000000000001', nextRank: 51,
   });
 });
-check('legacy 3-part cursor still decodes (nextRank null)', () => {
-  const legacy = Buffer.from(JSON.stringify([212, 1725000000000, 'u1'])).toString('base64url');
-  const c = decodeCursor(legacy);
-  assert.strictEqual(c.nextRank, null);
-  assert.strictEqual(c.value, 212);
+check('3-part cursor rejected — no legacy formats, nothing has shipped', () => {
+  const old = Buffer.from(JSON.stringify([212, 1725000000000, 'u1'])).toString('base64url');
+  assert.strictEqual(decodeCursor(old), null);
+});
+check('cursor without a positive numeric rank rejected', () => {
+  const bad = Buffer.from(JSON.stringify([212, 1725000000000, 'u1', 'fifty'])).toString('base64url');
+  assert.strictEqual(decodeCursor(bad), null);
+  const zero = Buffer.from(JSON.stringify([212, 1725000000000, 'u1', 0])).toString('base64url');
+  assert.strictEqual(decodeCursor(zero), null);
 });
 check('branch counts equal the $or predicate, decomposed', () => {
   const branches = betterThanBranches('totalKg', 'totalAchievedAt', 212, new Date(0), 'u1');
@@ -90,6 +94,18 @@ check('betterThan predicate: value beats, earlier date breaks ties', () => {
   assert.strictEqual(p.$or.length, 3);
   assert.deepStrictEqual(p.$or[0], { totalKg: { $gt: 212 } });
   assert.deepStrictEqual(p.$or[1].totalAchievedAt, { $lt: new Date(0) });
+});
+
+// --- board cache single-instance guard -------------------------------------
+const { assertSingleInstance, setStore, createMemoryStore } = require('../utils/leaderboard/boardCache');
+check('cache guard: refuses multi-instance env while store is in-process', () => {
+  assert.throws(() => assertSingleInstance({ WEB_CONCURRENCY: '2' }), /multi-instance/);
+  assert.throws(() => assertSingleInstance({ NODE_APP_INSTANCE: '1' }), /multi-instance/);
+});
+check('cache guard: single instance boots; shared store lifts the guard', () => {
+  assert.doesNotThrow(() => assertSingleInstance({}));
+  setStore(createMemoryStore()); // stands in for Redis: any explicit store lifts the guard
+  assert.doesNotThrow(() => assertSingleInstance({ WEB_CONCURRENCY: '4' }));
 });
 
 // --- controller param parsing / query shapes -------------------------------

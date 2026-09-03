@@ -89,7 +89,7 @@ async function main() {
   // Part 1 — explain() per board shape: winning index name + covered counts
   // -------------------------------------------------------------------------
   const { boardFilter } = require('../controllers/leaderboardController');
-  const { betterThanBranches } = require('../utils/leaderboard/cursor');
+  const { betterThanBranches, cursorPredicate, decodeCursor } = require('../utils/leaderboard/cursor');
 
   const shapes = [
     { name: 'total board (hot partition, COL)', lift: 'total', expectIndex: 'board_total',
@@ -202,21 +202,24 @@ async function main() {
       !countStages.includes('COLLSCAN') &&
       (countDocsExamined === null || countDocsExamined === 0); // covered: zero docs fetched
 
+    const pageStats = pagePlan.executionStats || {};
     explainResults.push({
       shape: s.name,
       expectIndex: s.expectIndex,
       pageIndexes,
       pageStages,
-      pageMs: pagePlan.executionStats
-        ? pagePlan.executionStats.executionTimeMillis
-        : null,
+      pageMs: pageStats.executionTimeMillis != null ? pageStats.executionTimeMillis : null,
+      pageKeysExamined: pageStats.totalKeysExamined != null ? pageStats.totalKeysExamined : null,
+      pageDocsExamined: pageStats.totalDocsExamined != null ? pageStats.totalDocsExamined : null,
       countIndexes,
       countStages,
       countKeysExamined: keysExamined,
       countDocsExamined,
       pass,
     });
-    console.log(`${pass ? 'PASS' : 'FAIL'}  ${s.name}  page=${pageIndexes} count docsExamined=${countDocsExamined}`);
+    console.log(
+      `${pass ? 'PASS' : 'FAIL'}  ${s.name}  page keys/docs=${pageStats.totalKeysExamined}/${pageStats.totalDocsExamined} count keys/docs=${keysExamined}/${countDocsExamined}`
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -278,6 +281,40 @@ async function main() {
     deepCursor = cursor;
   }
 
+  // ---------------------------------------------------------------------------
+  // Deep-page keysExamined (review): the worst-case latency row needs its own
+  // number. docsExamined proves covered-ness; keysExamined is the O(rank)
+  // in-index scan cost for a rare country filtered on a TRAILING index key.
+  // If this is a large fraction of the partition, the latency is work, not
+  // environment — and the targeted country-leading index earns its keep.
+  // ---------------------------------------------------------------------------
+  let deepPageExplain = null;
+  if (deepCursor) {
+    const m = METRICS.total;
+    const jpnFilter = boardFilter({ lift: 'total', scopeKey: 'S1', sex: 'M', weightClass: '79', age: 'open', country: 'JPN' });
+    const cur = decodeCursor(deepCursor);
+    const raw = await BoardEntry.find({ ...jpnFilter, ...cursorPredicate(m.field, m.tie, cur) })
+      .sort({ [m.field]: -1, [m.tie]: 1, user: 1 })
+      .limit(50)
+      .explain('executionStats');
+    const plan = explainRoot(raw);
+    const st = plan.executionStats || {};
+    const partitionSize = await BoardEntry.countDocuments(
+      boardFilter({ lift: 'total', scopeKey: 'S1', sex: 'M', weightClass: '79', age: 'open', country: null })
+    );
+    deepPageExplain = {
+      keysExamined: st.totalKeysExamined != null ? st.totalKeysExamined : null,
+      docsExamined: st.totalDocsExamined != null ? st.totalDocsExamined : null,
+      nReturned: st.nReturned != null ? st.nReturned : null,
+      executionTimeMillis: st.executionTimeMillis != null ? st.executionTimeMillis : null,
+      partitionSize,
+      indexes: [...findIndexNames(plan.queryPlanner && plan.queryPlanner.winningPlan)],
+    };
+    console.log(
+      `INFO  deep page (JPN + cursor): keysExamined=${deepPageExplain.keysExamined} docsExamined=${deepPageExplain.docsExamined} returned=${deepPageExplain.nReturned} of ${partitionSize}-key partition, ${deepPageExplain.executionTimeMillis}ms server-side`
+    );
+  }
+
   const scenarios = [];
   scenarios.push(await scenario('default board (hot, COL)', '/leaderboard?lift=total&class=79&sex=M&country=COL'));
   scenarios.push(await scenario('sinclair board', '/leaderboard?lift=sinclair&sex=M'));
@@ -291,7 +328,7 @@ async function main() {
   // Report
   // -------------------------------------------------------------------------
   const allPass = explainResults.every((r) => r.pass) && scenarios.every((s) => s.pass);
-  const report = { generatedAt: new Date().toISOString(), targetRps: TARGET_RPS, durationS: DURATION_S, p95GateMs: P95_GATE_MS, explainResults, scenarios, allPass };
+  const report = { generatedAt: new Date().toISOString(), targetRps: TARGET_RPS, durationS: DURATION_S, p95GateMs: P95_GATE_MS, explainResults, deepPageExplain, scenarios, allPass };
   fs.writeFileSync('bench-report.json', JSON.stringify(report, null, 2));
 
   const md = [
@@ -301,13 +338,21 @@ async function main() {
     '',
     '## explain() — winning index per board shape',
     '',
-    '| Shape | Expected index | Winning (page) | Count keys/docs examined | Verdict |',
-    '|---|---|---|---|---|',
+    '| Shape | Expected index | Winning (page) | Page keys/docs | Count keys/docs | Verdict |',
+    '|---|---|---|---|---|---|',
     ...explainResults.map((r) =>
-      `| ${r.shape} | \`${r.expectIndex}\` | \`${r.pageIndexes.join(', ')}\` | ${r.countKeysExamined} / ${r.countDocsExamined} | ${r.pass ? 'PASS' : '**FAIL**'} |`),
+      `| ${r.shape} | \`${r.expectIndex}\` | \`${r.pageIndexes.join(', ')}\` | ${r.pageKeysExamined} / ${r.pageDocsExamined} | ${r.countKeysExamined} / ${r.countDocsExamined} | ${r.pass ? 'PASS' : '**FAIL**'} |`),
     '',
-    'Covered-count criterion: `totalDocsExamined = 0` — the rank count never leaves the index.',
+    'Covered-count criterion: count `totalDocsExamined = 0` — the rank count never leaves the index.',
     '',
+    ...(deepPageExplain
+      ? [
+          '## Deep-page scan cost (worst case: rare country + cursor)',
+          '',
+          `keysExamined **${deepPageExplain.keysExamined}** · docsExamined ${deepPageExplain.docsExamined} · returned ${deepPageExplain.nReturned} rows · partition size ${deepPageExplain.partitionSize} · server-side ${deepPageExplain.executionTimeMillis} ms · index \`${deepPageExplain.indexes.join(', ')}\``,
+          '',
+        ]
+      : []),
     '## Latency under load (skewed 50k seed)',
     '',
     '| Scenario | RPS | p50 | p95 | p99 | Errors | Verdict |',
