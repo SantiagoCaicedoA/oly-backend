@@ -113,9 +113,30 @@ async function main() {
     sinclair: { field: 'sinclair', tie: 'totalAchievedAt' },
   };
 
+  /**
+   * Explain output arrives in different envelopes depending on the command:
+   * a plain find explain has queryPlanner at the top; countDocuments runs as
+   * an aggregate, whose explain nests everything under stages[0].$cursor;
+   * sharded output nests per-shard. Normalize before reading.
+   */
+  function explainRoot(explained) {
+    const doc = Array.isArray(explained) ? explained[0] : explained;
+    if (!doc) return {};
+    if (doc.queryPlanner || doc.executionStats) return doc;
+    if (Array.isArray(doc.stages)) {
+      const cur = doc.stages.find((st) => st && st.$cursor);
+      if (cur) return cur.$cursor;
+    }
+    if (doc.shards) {
+      const first = Object.values(doc.shards)[0];
+      if (first) return explainRoot(first);
+    }
+    return doc;
+  }
   function collectStages(stage, out = new Set()) {
     if (!stage) return out;
-    out.add(stage.stage);
+    if (stage.stage) out.add(stage.stage);
+    if (stage.queryPlan) collectStages(stage.queryPlan, out); // SBE nesting
     if (stage.inputStage) collectStages(stage.inputStage, out);
     if (stage.inputStages) stage.inputStages.forEach((s) => collectStages(s, out));
     if (stage.innerStage) collectStages(stage.innerStage, out);
@@ -125,6 +146,7 @@ async function main() {
   function findIndexNames(stage, out = new Set()) {
     if (!stage) return out;
     if (stage.indexName) out.add(stage.indexName);
+    if (stage.queryPlan) findIndexNames(stage.queryPlan, out);
     if (stage.inputStage) findIndexNames(stage.inputStage, out);
     if (stage.inputStages) stage.inputStages.forEach((s) => findIndexNames(s, out));
     return out;
@@ -135,11 +157,12 @@ async function main() {
     const m = METRICS[s.lift];
     const filter = boardFilter(s.p);
     // Board page plan
-    const pagePlan = await BoardEntry.find(filter)
+    const pagePlanRaw = await BoardEntry.find(filter)
       .sort({ [m.field]: -1, [m.tie]: 1, user: 1 })
       .limit(25)
       .explain('executionStats');
-    const pageWinning = pagePlan.queryPlanner.winningPlan;
+    const pagePlan = explainRoot(pagePlanRaw);
+    const pageWinning = pagePlan.queryPlanner && pagePlan.queryPlanner.winningPlan;
     const pageStages = [...collectStages(pageWinning)];
     const pageIndexes = [...findIndexNames(pageWinning)];
 
@@ -149,17 +172,22 @@ async function main() {
       || await BoardEntry.findOne(filter).lean();
     let countStages = [], countIndexes = [], countDocsExamined = null, keysExamined = null;
     if (mid) {
-      const countPlan = await BoardEntry.find({
+      const countPlanRaw = await BoardEntry.find({
         ...filter,
         ...betterThanPredicate(m.field, m.tie, mid[m.field], mid[m.tie], mid.user),
       })
         .countDocuments()
         .explain('executionStats');
-      const w = countPlan.queryPlanner.winningPlan;
+      const countPlan = explainRoot(countPlanRaw);
+      const w = countPlan.queryPlanner && countPlan.queryPlanner.winningPlan;
       countStages = [...collectStages(w)];
       countIndexes = [...findIndexNames(w)];
-      countDocsExamined = countPlan.executionStats.totalDocsExamined;
-      keysExamined = countPlan.executionStats.totalKeysExamined;
+      countDocsExamined = countPlan.executionStats
+        ? countPlan.executionStats.totalDocsExamined
+        : null;
+      keysExamined = countPlan.executionStats
+        ? countPlan.executionStats.totalKeysExamined
+        : null;
     }
 
     const pass =
@@ -173,7 +201,9 @@ async function main() {
       expectIndex: s.expectIndex,
       pageIndexes,
       pageStages,
-      pageMs: pagePlan.executionStats.executionTimeMillis,
+      pageMs: pagePlan.executionStats
+        ? pagePlan.executionStats.executionTimeMillis
+        : null,
       countIndexes,
       countStages,
       countKeysExamined: keysExamined,
