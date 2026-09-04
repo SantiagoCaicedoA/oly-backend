@@ -9,6 +9,9 @@ const dailyCheckInRoutes = require('./dailyCheckInRoutes');
 const v1AuthRoutes = require('./v1AuthRoutes');
 const setLogRoutes = require('./setLogRoutes');
 const followRoutes = require('./followRoutes');
+const leaderboardRoutes = require('./leaderboardRoutes');
+const seasonRoutes = require('./seasonRoutes');
+const athleteRoutes = require('./athleteRoutes');
 
 // API Routes
 router.use('/users', userRoutes);
@@ -20,6 +23,9 @@ router.use('/daily', dailyCheckInRoutes);
 router.use('/v1/auth', v1AuthRoutes);
 router.use('/set-log', setLogRoutes);
 router.use('/follow', followRoutes);
+router.use('/leaderboard', leaderboardRoutes);
+router.use('/seasons', seasonRoutes);
+router.use('/athletes', athleteRoutes);
 
 // Health check route
 router.get('/health', (req, res) => {
