@@ -33,23 +33,52 @@ const METRICS = {
 
 const MAX_LIMIT = 50;
 
-/** Parse + validate the shared board filter params. Returns null on bad input. */
+/**
+ * Parse + validate the shared board filter params.
+ *
+ * STRICT (review round 3): an OMITTED param takes its documented default;
+ * an INVALID value returns null and the endpoint answers 400. Silently
+ * substituting a different board for a typo is the worst available failure
+ * mode for a source-of-truth product — a client that misspells `sex` would
+ * get the men's board with a 200 and an unreproducible bug report. `sex`
+ * has no default at all: there is no neutral board to fall back to.
+ */
 function parseBoardParams(query) {
-  const lift = ['total', 'snatch', 'cleanjerk', 'sinclair'].includes(query.lift)
-    ? query.lift
-    : 'total';
-  const scope = query.scope === 'alltime' ? 'alltime' : 'season';
-  const sex = query.sex === 'F' ? 'F' : 'M';
-  const age = ['junior', 'masters'].includes(query.age) ? query.age : 'open';
-  const country =
-    typeof query.country === 'string' && /^[A-Z]{3}$/.test(query.country) ? query.country : null; // null = world
+  const sex = query.sex === 'M' || query.sex === 'F' ? query.sex : null; // required
+  if (!sex) return null;
+  const lift =
+    query.lift === undefined
+      ? 'total'
+      : ['total', 'snatch', 'cleanjerk', 'sinclair'].includes(query.lift) ? query.lift : null;
+  if (!lift) return null;
+  const scope =
+    query.scope === undefined ? 'season' : ['season', 'alltime'].includes(query.scope) ? query.scope : null;
+  if (!scope) return null;
+  const age =
+    query.age === undefined ? 'open' : ['open', 'junior', 'masters'].includes(query.age) ? query.age : null;
+  if (!age) return null;
+  let country = null; // null = world
+  if (query.country !== undefined) {
+    if (typeof query.country === 'string' && /^[A-Z]{3}$/.test(query.country)) country = query.country;
+    else return null;
+  }
   let weightClass = null;
   if (lift !== 'sinclair') {
     const valid = classLabels(sex);
-    weightClass = valid.includes(query.class) ? query.class : valid[4]; // sensible default mid-table
+    if (query.class === undefined) weightClass = valid[4]; // documented default: mid-table
+    else if (valid.includes(query.class)) weightClass = query.class;
+    else return null;
   }
   const limit = Math.min(Math.max(parseInt(query.limit, 10) || 25, 1), MAX_LIMIT);
   return { lift, scope, sex, age, country, weightClass, limit };
+}
+
+function badParams(res) {
+  return res.status(400).json({
+    success: false,
+    message:
+      'Invalid board parameters: sex is required (M|F); lift, scope, class, age and country must be valid values when present',
+  });
 }
 
 /**
@@ -60,6 +89,11 @@ function parseBoardParams(query) {
  * one DB round-trip from every single board/me/card call. Worst case after
  * a season transition: 60s of the old answer, which the 7-day grace period
  * makes harmless.
+ *
+ * Deliberately NOT behind boardCache's store interface and NOT covered by
+ * its single-instance guard: unlike board bodies, this is multi-instance
+ * safe — every instance independently converges on the same season within
+ * 60s, and a brief disagreement is absorbed by the grace period.
  */
 let seasonCache = { value: null, expiresAt: 0 };
 async function resolveScopeKey(scope) {
@@ -156,6 +190,7 @@ function seasonMeta(season) {
 async function getLeaderboard(req, res) {
   try {
     const params = parseBoardParams(req.query);
+    if (!params) return badParams(res);
     const { scopeKey, season } = await resolveScopeKey(params.scope);
     const m = METRICS[params.lift];
     const filter = boardFilter({ ...params, scopeKey });
@@ -192,7 +227,10 @@ async function getLeaderboard(req, res) {
     const last = entries[entries.length - 1];
     const body = {
       season: seasonMeta(season),
-      scope: params.scope,
+      // The scope ACTUALLY SERVED (review round 3): scope=season with no
+      // active season resolves to the all-time board — say so instead of
+      // labeling an all-time board "season".
+      scope: scopeKey === 'alltime' ? 'alltime' : params.scope,
       entries: rows,
       nextCursor:
         entries.length === params.limit && last
@@ -219,7 +257,9 @@ function sendWithEtag(req, res, body) {
   const etag = '"' + crypto.createHash('md5').update(json).digest('hex') + '"';
   if (req.headers['if-none-match'] === etag) return res.status(304).end();
   res.set('ETag', etag);
-  res.set('Cache-Control', 'private, max-age=30');
+  // 15s client + 45s server cache = 60s worst-case staleness, the budget
+  // the design doc promises (30s here silently made it 75 — review round 3).
+  res.set('Cache-Control', 'private, max-age=15');
   return res.type('application/json').send(json);
 }
 
@@ -229,18 +269,34 @@ function sendWithEtag(req, res, body) {
 async function getMyRank(req, res) {
   try {
     const params = parseBoardParams(req.query);
+    if (!params) return badParams(res);
     const { scopeKey, season } = await resolveScopeKey(params.scope);
     const m = METRICS[params.lift];
 
     // Resolve MY entry for this board shape (§4.5): class pinned -> that
     // class's entry; class-less (Sinclair) -> the entry carrying sinclair.
+    // REAL ENTRIES FIRST, DETERMINISTICALLY (review round 3): an athlete can
+    // hold both a provisional (onboarding) and a verified entry — an
+    // unsorted findOne without a provisional predicate returns whichever
+    // the storage engine feels like, so a self-reported 1RM could be served
+    // as the real rank. Verified entry wins; provisional is the explicit
+    // fallback; sort makes multi-entry cases deterministic.
     const own = { user: req.user._id, scopeKey };
     let entry;
     if (params.lift === 'sinclair') {
-      entry = await BoardEntry.findOne({ ...own, sinclair: { $gt: 0 } }).lean();
-      if (!entry) entry = await BoardEntry.findOne({ ...own, provisional: true }).lean();
+      entry = await BoardEntry.findOne({ ...own, provisional: false, sinclair: { $gt: 0 } })
+        .sort({ sinclair: -1 })
+        .lean();
+      if (!entry) {
+        entry = await BoardEntry.findOne({ ...own, provisional: true, sinclair: { $gt: 0 } })
+          .sort({ sinclair: -1 })
+          .lean();
+      }
     } else {
-      entry = await BoardEntry.findOne({ ...own, weightClass: params.weightClass }).lean();
+      entry = await BoardEntry.findOne({ ...own, provisional: false, weightClass: params.weightClass }).lean();
+      if (!entry) {
+        entry = await BoardEntry.findOne({ ...own, provisional: true, weightClass: params.weightClass }).lean();
+      }
     }
 
     if (!entry || !entry[m.field]) {
@@ -279,26 +335,60 @@ async function getMyRank(req, res) {
 // ---------------------------------------------------------------------------
 // GET /api/leaderboard/friends
 // ---------------------------------------------------------------------------
+// A friends board is bounded by follow count, not partition size — capped
+// so a 50,000-follow account can't build a 50,000-element $in.
+const FOLLOW_CAP = 1000;
+
 async function getFriendsBoard(req, res) {
   try {
     const params = parseBoardParams(req.query);
+    if (!params) return badParams(res);
     const { scopeKey, season } = await resolveScopeKey(params.scope);
     const m = METRICS[params.lift];
 
-    // Bounded by design: a user follows hundreds, not millions.
-    const edges = await Follow.find({ follower: req.user._id }).select('following').lean();
+    const edges = await Follow.find({ follower: req.user._id })
+      .select('following')
+      .limit(FOLLOW_CAP)
+      .lean();
     const ids = edges.map((e) => e.following);
     ids.push(req.user._id); // you appear on your own friends board
 
-    const filter = { ...boardFilter({ ...params, scopeKey }), user: { $in: ids } };
-    const entries = await BoardEntry.find(filter)
-      .sort({ [m.field]: -1, [m.tie]: 1, user: 1 })
-      .limit(MAX_LIMIT)
-      .lean();
+    // THE QUERY SHAPE MATTERS (review round 3 — the real scale trap): with
+    // the board filter + $in, the planner walks the metric index in sort
+    // order testing user ∈ ids per key; a user with <50 friends in this
+    // class never fills the limit, so it walks the ENTIRE partition, every
+    // time, for almost every user. Instead: fetch BY USER on the
+    // (user, scopeKey, weightClass) unique index — bounded by follow count
+    // (hundreds), not partition size (tens of thousands) — then filter and
+    // sort the handful in JS, exactly as the design doc §6 specified.
+    const candidates = await BoardEntry.find({
+      user: { $in: ids },
+      scopeKey,
+      provisional: false,
+    }).lean();
+
+    const agePred = birthYearPredicate(params.age).birthYear || null;
+    const matches = candidates.filter((e) => {
+      if (e.sex !== params.sex) return false;
+      if (params.lift !== 'sinclair' && e.weightClass !== params.weightClass) return false;
+      if (!(e[m.field] > 0)) return false;
+      if (params.country && e.countryCode !== params.country) return false;
+      if (agePred) {
+        if (agePred.$gte != null && !(e.birthYear >= agePred.$gte)) return false;
+        if (agePred.$lte != null && !(e.birthYear <= agePred.$lte)) return false;
+      }
+      return true;
+    });
+    matches.sort(
+      (a, b) =>
+        b[m.field] - a[m.field] ||
+        new Date(a[m.tie]) - new Date(b[m.tie]) ||
+        String(a.user).localeCompare(String(b.user))
+    );
 
     return res.json({
       season: seasonMeta(season),
-      entries: entries.map((e, i) => entryToRow(e, params.lift, i + 1)),
+      entries: matches.slice(0, MAX_LIMIT).map((e, i) => entryToRow(e, params.lift, i + 1)),
     });
   } catch (err) {
     console.error('getFriendsBoard error:', err);
@@ -325,14 +415,18 @@ async function getCurrentSeason(req, res) {
 async function getAthleteCard(req, res) {
   try {
     const params = parseBoardParams(req.query);
+    if (!params) return badParams(res);
     const { scopeKey, season } = await resolveScopeKey(params.scope);
     const Lift = require('../models/Lift');
 
+    // provisional: false throughout, sorted — the card never shows an
+    // onboarding self-report, and multi-entry athletes resolve
+    // deterministically (review round 3).
     const own = { user: req.params.id, scopeKey, provisional: false };
     let entry;
     if (params.lift === 'sinclair' || !req.query.class) {
       entry =
-        (await BoardEntry.findOne({ ...own, sinclair: { $gt: 0 } }).lean()) ||
+        (await BoardEntry.findOne({ ...own, sinclair: { $gt: 0 } }).sort({ sinclair: -1 }).lean()) ||
         (await BoardEntry.findOne(own).sort({ totalKg: -1 }).lean());
     } else {
       entry = await BoardEntry.findOne({ ...own, weightClass: params.weightClass }).lean();
