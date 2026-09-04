@@ -30,6 +30,10 @@ check('class for 79.2 M is 88 (79 cap exceeded)', () =>
 check('class for 79.0 M is 79 (at the cap)', () =>
   assert.strictEqual(classForBodyweight(79.0, 'M'), '79'));
 check('class for 130 M is +110', () => assert.strictEqual(classForBodyweight(130, 'M'), '+110'));
+check('a REAL split-class pair: 78.6 → 79, 80.4 → 88 (review round 3 example fix)', () => {
+  assert.strictEqual(classForBodyweight(78.6, 'M'), '79');
+  assert.strictEqual(classForBodyweight(80.4, 'M'), '88');
+});
 check('heavier-or-equal ordering', () => {
   assert.ok(isHeavierOrEqualClass('88', '79', 'M'));
   assert.ok(isHeavierOrEqualClass('+110', '60', 'M'));
@@ -96,30 +100,48 @@ check('betterThan predicate: value beats, earlier date breaks ties', () => {
   assert.deepStrictEqual(p.$or[1].totalAchievedAt, { $lt: new Date(0) });
 });
 
-// --- board cache single-instance guard -------------------------------------
+// --- board cache single-instance guard (fail-closed, review round 3) -------
 const { assertSingleInstance, setStore, createMemoryStore } = require('../utils/leaderboard/boardCache');
-check('cache guard: refuses multi-instance env while store is in-process', () => {
-  assert.throws(() => assertSingleInstance({ WEB_CONCURRENCY: '2' }), /multi-instance/);
-  assert.throws(() => assertSingleInstance({ NODE_APP_INSTANCE: '1' }), /multi-instance/);
+check('cache guard: production refuses an UNDECLARED in-process cache (fail closed)', () => {
+  // Render/Fly/Railway/Cloud Run set no telltale env vars — so the guard
+  // requires a declaration instead of detecting platforms.
+  assert.throws(() => assertSingleInstance({ NODE_ENV: 'production' }), /refusing to boot/);
+  assert.throws(
+    () => assertSingleInstance({ NODE_ENV: 'production', WEB_CONCURRENCY: '1' }),
+    /refusing to boot/
+  );
 });
-check('cache guard: single instance boots; shared store lifts the guard', () => {
-  assert.doesNotThrow(() => assertSingleInstance({}));
-  setStore(createMemoryStore()); // stands in for Redis: any explicit store lifts the guard
-  assert.doesNotThrow(() => assertSingleInstance({ WEB_CONCURRENCY: '4' }));
+check('cache guard: explicit declaration boots; dev boots; shared store lifts it', () => {
+  assert.doesNotThrow(() =>
+    assertSingleInstance({ NODE_ENV: 'production', BOARD_CACHE: 'memory-single-instance' }));
+  assert.doesNotThrow(() => assertSingleInstance({})); // dev/test
+  setStore(createMemoryStore()); // stands in for Redis: an explicit store lifts the guard
+  assert.doesNotThrow(() => assertSingleInstance({ NODE_ENV: 'production' }));
 });
 
 // --- controller param parsing / query shapes -------------------------------
 const { parseBoardParams, boardFilter } = require('../controllers/leaderboardController');
-check('params: defaults are total/season/M/open', () => {
-  const p = parseBoardParams({});
+check('params: sex is REQUIRED — no silent men\'s-board default (review round 3)', () => {
+  assert.strictEqual(parseBoardParams({}), null);
+  assert.strictEqual(parseBoardParams({ sex: 'x' }), null);
+  assert.strictEqual(parseBoardParams({ sex: 'f' }), null); // case-exact, no coercion
+});
+check('params: omitted params default (total/season/open), with sex given', () => {
+  const p = parseBoardParams({ sex: 'M' });
   assert.strictEqual(p.lift, 'total');
   assert.strictEqual(p.scope, 'season');
   assert.strictEqual(p.age, 'open');
+  assert.strictEqual(p.weightClass, '88'); // documented mid-table default
+});
+check('params: INVALID values are rejected, never substituted (400, not a wrong board)', () => {
+  assert.strictEqual(parseBoardParams({ sex: 'M', lift: 'deadlift' }), null);
+  assert.strictEqual(parseBoardParams({ sex: 'M', class: '83' }), null);
+  assert.strictEqual(parseBoardParams({ sex: 'M', age: 'senior' }), null);
+  assert.strictEqual(parseBoardParams({ sex: 'M', scope: 'weekly' }), null);
+  assert.strictEqual(parseBoardParams({ sex: 'M', country: 'colombia; DROP' }), null);
 });
 check('params: limit clamped to 50', () =>
-  assert.strictEqual(parseBoardParams({ limit: '500' }).limit, 50));
-check('params: bad country rejected (equality only, IOC shape)', () =>
-  assert.strictEqual(parseBoardParams({ country: 'colombia; DROP' }).country, null));
+  assert.strictEqual(parseBoardParams({ sex: 'M', limit: '500' }).limit, 50));
 check('every board filter carries provisional:false (partial-index match)', () => {
   for (const lift of ['total', 'snatch', 'cleanjerk', 'sinclair']) {
     const f = boardFilter({ lift, scopeKey: 'S1', sex: 'M', weightClass: '79', age: 'open', country: null });
@@ -134,13 +156,19 @@ check('sinclair filter carries sinclair:{$gt:0} (partial-index selection, rev 5)
 
 // --- model index definitions ----------------------------------------------
 const BoardEntry = require('../models/BoardEntry');
-check('all four board indexes are partial on provisional:false', () => {
+check('all five board indexes are partial on provisional:false', () => {
   const idx = BoardEntry.schema.indexes();
   const partials = idx.filter(([, o]) => o.partialFilterExpression);
-  assert.strictEqual(partials.length, 4, `expected 4 partial indexes, got ${partials.length}`);
+  assert.strictEqual(partials.length, 5, `expected 5 partial indexes, got ${partials.length}`);
   for (const [, opts] of partials) {
     assert.strictEqual(opts.partialFilterExpression.provisional, false, opts.name);
   }
+});
+check('country-leading total twin exists with countryCode second (review round 3)', () => {
+  const idx = BoardEntry.schema.indexes();
+  const byName = Object.fromEntries(idx.map(([keys, o]) => [o.name, keys]));
+  assert.deepStrictEqual(Object.keys(byName.board_total_country),
+    ['scopeKey', 'countryCode', 'sex', 'weightClass', 'totalKg', 'totalAchievedAt', 'user', 'birthYear']);
 });
 check('sinclair index partial additionally requires sinclair > 0', () => {
   const idx = BoardEntry.schema.indexes();
