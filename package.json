@@ -9,7 +9,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "check:leaderboard": "node scripts/checksLeaderboard.js",
     "seed:leaderboard": "node scripts/seedLeaderboard.js",
-    "bench:leaderboard": "node scripts/benchLeaderboard.js"
+    "bench:leaderboard": "node scripts/benchLeaderboard.js",
+    "check:writepath": "node scripts/checksWritePath.js"
   },
   "keywords": [
     "express",

@@ -11,6 +11,12 @@ const profileSchema = new Schema(
     profile_video_urls: [String], // All profile video URLs (multiple uploads)
     display_name: String,
     country: String,
+    // Leaderboard identity (design doc §4.4, added phase 2): IOC country
+    // code, club, and birth YEAR (IWF age categories use birth year, not
+    // birthdate). Board entries denormalize these — identity only.
+    countryCode: String, // IOC 3-letter, e.g. "COL"
+    club: String,
+    birth_year: Number,
     age: Number,
     sex: { type: String, enum: ['Male', 'Female', 'Other'] },
     experience_years: Number,
@@ -123,6 +129,9 @@ const userSchema = new Schema(
       type: profileSchema,
       default: undefined,
     },
+    // Review-queue access (phase 2). Manual flag — one reviewer today; a
+    // roles system is deliberately premature.
+    isAdmin: { type: Boolean, default: false },
     // Product tier — 'personalized' unlocks the rolling AI coach; 'free' runs the deterministic Oly Team plan.
     subscription: {
       tier: { type: String, enum: ['free', 'personalized'], default: 'free' },
