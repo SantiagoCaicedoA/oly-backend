@@ -15,23 +15,29 @@ const DEFAULT_TTL_MS = 45 * 1000;
 const MAX_ENTRIES = 500; // bounded: filter-tuple space is small in practice
 
 /**
- * HARD GUARD (review): "we'll remember not to scale out" is not a control.
- * If the process is visibly one of several instances (pm2 cluster sets
- * NODE_APP_INSTANCE, Heroku-style deploys set WEB_CONCURRENCY) and the
- * cache is still the in-process store, refuse to boot — a fleet of
- * per-instance caches serves inconsistent boards with nothing in the logs.
- * Swapping in a shared store via setStore() clears the flag.
+ * HARD GUARD, FAIL-CLOSED (review rounds 2+3): "we'll remember not to scale
+ * out" is not a control — and neither is an allowlist of env var names.
+ * The first version detected multi-instance deploys via WEB_CONCURRENCY /
+ * NODE_APP_INSTANCE, which pm2 and Heroku set but Render, Fly, Railway and
+ * Cloud Run do not — it failed open exactly where we'd actually deploy.
+ * Inverted: in production, running the in-process store requires the
+ * operator to explicitly DECLARE single-instance operation with
+ * BOARD_CACHE=memory-single-instance. No declaration → refuse to boot.
+ * Scaling out then has a natural forcing function: the operator must touch
+ * this setting, and the comment they land on says to install a shared
+ * store via setStore() (e.g. Redis) first — design doc §7/§9.
+ * Dev/test boots freely.
  */
 let usingMemoryStore = true;
 function assertSingleInstance(env = process.env) {
   if (!usingMemoryStore) return; // shared store installed — scale freely
-  const webConcurrency = parseInt(env.WEB_CONCURRENCY || '1', 10);
-  const pm2Instance = env.NODE_APP_INSTANCE != null ? parseInt(env.NODE_APP_INSTANCE, 10) : 0;
-  if (webConcurrency > 1 || pm2Instance > 0) {
+  if (env.NODE_ENV !== 'production') return;
+  if (env.BOARD_CACHE !== 'memory-single-instance') {
     throw new Error(
-      'boardCache: in-process cache detected in a multi-instance deployment ' +
-        '(WEB_CONCURRENCY/NODE_APP_INSTANCE). Install a shared store via ' +
-        'setStore() (e.g. Redis) before scaling out — design doc §7/§9.'
+      'boardCache: refusing to boot in production with the in-process cache ' +
+        'undeclared. Either set BOARD_CACHE=memory-single-instance (single ' +
+        'API instance ONLY — per-instance caches serve inconsistent boards) ' +
+        'or install a shared store via setStore() (e.g. Redis) — design doc §7/§9.'
     );
   }
 }

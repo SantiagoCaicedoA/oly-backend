@@ -7,8 +7,15 @@
  */
 
 const SINCLAIR_TABLES = {
-  // 2021–2024 cycle coefficients. Update by ADDING a new version when the
-  // 2025–2028 values are published/adopted — never by editing in place.
+  // The LATEST PUBLISHED set (review finding, resolved 2026-09): the IWF has
+  // not released 2025–2028 coefficients — the June-2025 category change came
+  // with World Standards (qualification totals, est. 2025-06/2026-08), not a
+  // new Sinclair set, which needs record history inside the new categories.
+  // These are the official 2021–2024 (Tokyo-cycle) values; the older
+  // 2017–2020 set was A=0.751945030/b=175.508 (M). When the IWF publishes
+  // the next set, ADD a new version and rebuild — sinclairSetVersion is
+  // stored per entry, so it's a table add, never a migration. Never edit a
+  // published table in place.
   'v2021-2024': {
     M: { A: 0.722762521, b: 193.609 },
     F: { A: 0.787004341, b: 153.757 },

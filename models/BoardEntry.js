@@ -82,9 +82,9 @@ const BoardEntrySchema = new Schema(
  * cursor; countryCode + birthYear as trailing keys so filtered queries AND
  * filtered rank counts are covered (index-only, no document fetches).
  *
- * ALL FOUR ARE PARTIAL on { provisional: false }: provisional entries never
- * occupy the board indexes, and every board query carries the matching
- * equality so the planner selects them.
+ * ALL BOARD INDEXES ARE PARTIAL on { provisional: false }: provisional
+ * entries never occupy the board indexes, and every board query carries the
+ * matching equality so the planner selects them.
  *
  * The Sinclair index is additionally partial on { sinclair: { $gt: 0 } } —
  * and the Sinclair board query MUST carry sinclair: { $gt: 0 }: a bare sort
@@ -96,6 +96,20 @@ const partialBoard = { partialFilterExpression: { provisional: false } };
 BoardEntrySchema.index(
   { scopeKey: 1, sex: 1, weightClass: 1, totalKg: -1, totalAchievedAt: 1, user: 1, countryCode: 1, birthYear: 1 },
   { name: 'board_total', ...partialBoard }
+);
+/**
+ * Country-leading twin for the TOTAL board only (review round 3): with
+ * countryCode as a trailing key, a rare-country page deep in a hot class
+ * walks the whole partition in-index (measured: 10,904 of 11,301 keys for
+ * one JPN row). Leading with countryCode makes country-pinned total pages
+ * and counts tight range walks bounded by that country's entries. Total is
+ * the default board; country-filtered deep pages on snatch/clean/Sinclair
+ * are a long tail of a long tail — watched via a keysExamined alert rather
+ * than bought three more indexes (revisit when the metric says to).
+ */
+BoardEntrySchema.index(
+  { scopeKey: 1, countryCode: 1, sex: 1, weightClass: 1, totalKg: -1, totalAchievedAt: 1, user: 1, birthYear: 1 },
+  { name: 'board_total_country', ...partialBoard }
 );
 BoardEntrySchema.index(
   { scopeKey: 1, sex: 1, weightClass: 1, bestSnatchKg: -1, snatchAchievedAt: 1, user: 1, countryCode: 1, birthYear: 1 },
