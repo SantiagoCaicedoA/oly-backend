@@ -75,6 +75,32 @@ async function main() {
     );
   }
 
+  // Friends-board realism (review round 3 — the scenario the bench lacked):
+  // the bench user follows ~30 seeded athletes, only some in the queried
+  // class. This is the default state that made the naive board-filter + $in
+  // walk the whole partition; the fixed query is bounded by follow count.
+  const Follow = require('../models/Follow');
+  const inClass = await BoardEntry.aggregate([
+    { $match: { provisional: false, sex: 'M', weightClass: '79', user: { $ne: benchUser._id } } },
+    { $sample: { size: 15 } },
+    { $project: { user: 1 } },
+  ]);
+  const anywhere = await BoardEntry.aggregate([
+    { $match: { provisional: false, user: { $ne: benchUser._id } } },
+    { $sample: { size: 15 } },
+    { $project: { user: 1 } },
+  ]);
+  const friendIds = [...new Set([...inClass, ...anywhere].map((d) => String(d.user)))];
+  await Follow.bulkWrite(
+    friendIds.map((fid) => ({
+      updateOne: {
+        filter: { follower: benchUser._id, following: fid },
+        update: { $setOnInsert: { follower: benchUser._id, following: fid } },
+        upsert: true,
+      },
+    }))
+  );
+
   const app = express();
   app.set('trust proxy', 1);
   app.use(express.json());
@@ -92,7 +118,9 @@ async function main() {
   const { betterThanBranches, cursorPredicate, decodeCursor } = require('../utils/leaderboard/cursor');
 
   const shapes = [
-    { name: 'total board (hot partition, COL)', lift: 'total', expectIndex: 'board_total',
+    // Country-pinned total shapes should now win the country-leading twin
+    // (board_total_country, review round 3); unpinned shapes keep board_total.
+    { name: 'total board (hot partition, COL)', lift: 'total', expectIndex: 'board_total_country',
       p: { lift: 'total', scopeKey: 'S1', sex: 'M', weightClass: '79', age: 'open', country: 'COL' } },
     { name: 'snatch board', lift: 'snatch', expectIndex: 'board_snatch',
       p: { lift: 'snatch', scopeKey: 'S1', sex: 'M', weightClass: '79', age: 'open', country: null } },
@@ -100,7 +128,7 @@ async function main() {
       p: { lift: 'cleanjerk', scopeKey: 'S1', sex: 'M', weightClass: '88', age: 'open', country: null } },
     { name: 'sinclair board (must select partial index)', lift: 'sinclair', expectIndex: 'board_sinclair',
       p: { lift: 'sinclair', scopeKey: 'S1', sex: 'M', weightClass: null, age: 'open', country: null } },
-    { name: 'WORST CASE: rare country in dominant class', lift: 'total', expectIndex: 'board_total',
+    { name: 'WORST CASE: rare country in dominant class', lift: 'total', expectIndex: 'board_total_country',
       p: { lift: 'total', scopeKey: 'S1', sex: 'M', weightClass: '79', age: 'open', country: 'JPN' } },
     { name: 'junior filter (birthYear range)', lift: 'total', expectIndex: 'board_total',
       p: { lift: 'total', scopeKey: 'S1', sex: 'M', weightClass: '79', age: 'junior', country: null } },
@@ -218,7 +246,7 @@ async function main() {
       pass,
     });
     console.log(
-      `${pass ? 'PASS' : 'FAIL'}  ${s.name}  page keys/docs=${pageStats.totalKeysExamined}/${pageStats.totalDocsExamined} count keys/docs=${keysExamined}/${countDocsExamined}`
+      `${pass ? 'PASS' : 'FAIL'}  ${s.name}  page=${pageIndexes} keys/docs=${pageStats.totalKeysExamined}/${pageStats.totalDocsExamined} count keys/docs=${keysExamined}/${countDocsExamined}`
     );
   }
 
@@ -285,8 +313,8 @@ async function main() {
   // Deep-page keysExamined (review): the worst-case latency row needs its own
   // number. docsExamined proves covered-ness; keysExamined is the O(rank)
   // in-index scan cost for a rare country filtered on a TRAILING index key.
-  // If this is a large fraction of the partition, the latency is work, not
-  // environment — and the targeted country-leading index earns its keep.
+  // With board_total_country (review round 3) this walk should now be bounded
+  // by the country's entries, not the partition.
   // ---------------------------------------------------------------------------
   let deepPageExplain = null;
   if (deepCursor) {
@@ -311,7 +339,7 @@ async function main() {
       indexes: [...findIndexNames(plan.queryPlanner && plan.queryPlanner.winningPlan)],
     };
     console.log(
-      `INFO  deep page (JPN + cursor): keysExamined=${deepPageExplain.keysExamined} docsExamined=${deepPageExplain.docsExamined} returned=${deepPageExplain.nReturned} of ${partitionSize}-key partition, ${deepPageExplain.executionTimeMillis}ms server-side`
+      `INFO  deep page (JPN + cursor): keysExamined=${deepPageExplain.keysExamined} docsExamined=${deepPageExplain.docsExamined} returned=${deepPageExplain.nReturned} of ${partitionSize}-key partition, ${deepPageExplain.executionTimeMillis}ms server-side, index=${deepPageExplain.indexes}`
     );
   }
 
@@ -322,6 +350,7 @@ async function main() {
     `/leaderboard?lift=total&class=79&sex=M&country=JPN${deepCursor ? `&cursor=${deepCursor}` : ''}`));
   scenarios.push(await scenario('/me (hot board)', '/leaderboard/me?lift=total&class=79&sex=M'));
   scenarios.push(await scenario('/me (sinclair)', '/leaderboard/me?lift=sinclair&sex=M'));
+  scenarios.push(await scenario('friends board (~30 follows)', '/leaderboard/friends?lift=total&class=79&sex=M'));
   scenarios.push(await scenario('athlete card', sample ? `/athletes/${sample.user}/card?lift=total&class=${sample.weightClass}&sex=${sample.sex}` : '/seasons/current'));
 
   // -------------------------------------------------------------------------
