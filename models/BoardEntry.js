@@ -54,6 +54,11 @@ const BoardEntrySchema = new Schema(
     // (enforced by the partial indexes), visible only via /leaderboard/me.
     provisional: { type: Boolean, default: false },
 
+    // Visible "pending verification" badge (§5): true while any lift
+    // contributing to this entry awaits review — the row ranks normally
+    // and wears the marker.
+    pendingReview: { type: Boolean, default: false },
+
     // Canonical class-partition ranks, maintained by the phase-2 renumber
     // worker (idempotent sorted recompute + $set — never $inc). Sinclair
     // rank is NEVER materialized: its (scope, sex) partition is ~25k at
