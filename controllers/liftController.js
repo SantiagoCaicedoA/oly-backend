@@ -1,11 +1,15 @@
-const mongoose = require('mongoose');
 const Lift = require('../models/Lift');
 const Flag = require('../models/Flag');
 const Season = require('../models/Season');
 const BoardEntry = require('../models/BoardEntry');
 const OutboxEvent = require('../models/OutboxEvent');
 const AuditLog = require('../models/AuditLog');
-const { buildIdentity, recomputeAthlete, scopeKeysForLiftDate } = require('../services/boardWrite');
+const {
+  buildIdentity,
+  recomputeAthlete,
+  scopeKeysForLiftDate,
+  runBoardTransaction,
+} = require('../services/boardWrite');
 const { classForBodyweight } = require('../utils/leaderboard/classTable');
 const { crossesPlausibilityCap } = require('../utils/leaderboard/caps');
 const { betterThanBranches } = require('../utils/leaderboard/cursor');
@@ -86,9 +90,12 @@ async function entersMatureTop(liftType, weightKg, sex, weightClass, scopeKeys) 
   const m = METRIC_FOR_TYPE[liftType];
   for (const scopeKey of scopeKeys) {
     const base = { scopeKey, sex, weightClass, provisional: false };
-    const size = await BoardEntry.countDocuments({ ...base, [m.field]: { $gt: 0 } });
+    // Independent counts — one round-trip wide, not two (review round 4).
+    const [size, betterCount] = await Promise.all([
+      BoardEntry.countDocuments({ ...base, [m.field]: { $gt: 0 } }),
+      BoardEntry.countDocuments({ ...base, [m.field]: { $gt: weightKg } }),
+    ]);
     if (size < MATURE_BOARD_MIN) continue;
-    const betterCount = await BoardEntry.countDocuments({ ...base, [m.field]: { $gt: weightKg } });
     if (betterCount < TOP_N_BADGE) return true;
   }
   return false;
@@ -158,9 +165,10 @@ async function submitLift(req, res) {
       idemKey: v.idemKey,
     };
 
-    // Minimal transaction: lift + own entries + outbox + audit. Requires a
-    // replica set (Atlas default); a standalone dev Mongo falls back to
-    // sequential writes with a warning — same operations, no atomicity.
+    // Minimal transaction: lift + own entries + outbox + audit. Atomicity
+    // is required — the sequential path exists ONLY behind
+    // ALLOW_NON_TRANSACTIONAL=1 for standalone dev Mongo (see
+    // runBoardTransaction, review round 4).
     let lift;
     const writeAll = async (session) => {
       const created = await Lift.create(session ? [{ ...liftDoc }] : { ...liftDoc }, session ? { session } : undefined);
@@ -186,23 +194,18 @@ async function submitLift(req, res) {
     };
 
     try {
-      const session = await mongoose.startSession();
-      try {
-        await session.withTransaction(() => writeAll(session));
-      } finally {
-        session.endSession();
-      }
+      await runBoardTransaction(writeAll);
     } catch (err) {
-      if (/replica set|Transaction numbers/i.test(err.message)) {
-        console.warn('lifts: transactions unavailable (standalone Mongo?) — sequential fallback');
-        await writeAll(null);
-      } else if (err.code === 11000) {
-        // Concurrent duplicate submit raced the earlier check.
+      if (err.code === 11000) {
+        // Concurrent duplicate submit raced the pre-check — on EITHER path
+        // (transactional or dev-sequential). Return the original; if the
+        // racing write isn't visible yet, tell the client to retry rather
+        // than handing publicLift a null (review round 4).
         const dup = await Lift.findOne({ user: req.user._id, idemKey: v.idemKey }).lean();
-        return res.status(200).json({ success: true, duplicate: true, lift: publicLift(dup) });
-      } else {
-        throw err;
+        if (dup) return res.status(200).json({ success: true, duplicate: true, lift: publicLift(dup) });
+        return bad(res, 409, 'Duplicate submission in flight — retry in a moment');
       }
+      throw err;
     }
 
     // The instant reward: rank on the class board for this lift's own
@@ -221,11 +224,15 @@ async function submitLift(req, res) {
         const base = { scopeKey, sex: identity.sex, weightClass, provisional: false };
         ranks = { scopeKey, weightClass, lift: await rankOnBoard(base, m, entry[m.field], entry[m.tie], entry.user) };
         // Total rank lives wherever the athlete's combined entry is.
+        // §4.5 guarantees at most ONE entry carries a total per scope; the
+        // sort makes a violation visible instead of arbitrary (round 4).
         const totalEntry = await BoardEntry.findOne({
           user: req.user._id,
           scopeKey,
           totalKg: { $gt: 0 },
-        }).lean();
+        })
+          .sort({ totalKg: -1 })
+          .lean();
         if (totalEntry) {
           ranks.total = await rankOnBoard(
             { scopeKey, sex: identity.sex, weightClass: totalEntry.weightClass, provisional: false },
@@ -308,6 +315,24 @@ async function flagLift(req, res) {
     lift.flagCount += 1;
     lift.pendingReview = true;
     await lift.save();
+    // THE BADGE MUST APPEAR (review round 4): the entire case for letting a
+    // suspect lift keep its rank is that the row visibly says "pending
+    // verification" — the first version queued the lift but never touched
+    // the board, so a flagged lift sat at #1 looking clean. Mark every
+    // entry this lift contributes to, directly by reference (no identity
+    // or recompute needed; review's approve/remove recomputes and thereby
+    // clears or resolves the badge through the normal path).
+    await BoardEntry.updateMany(
+      {
+        $or: [
+          { snatchLift: lift._id },
+          { cleanLift: lift._id },
+          { totalSnatchLift: lift._id },
+          { totalCleanLift: lift._id },
+        ],
+      },
+      { $set: { pendingReview: true } }
+    );
     await AuditLog.create({ actor: req.user._id, action: 'lift.flag', subject: lift._id, meta: { reason } });
 
     return res.status(201).json({ success: true, message: 'Flag recorded — the lift will be reviewed' });

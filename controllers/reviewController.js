@@ -1,11 +1,16 @@
-const mongoose = require('mongoose');
 const Lift = require('../models/Lift');
 const Flag = require('../models/Flag');
 const Season = require('../models/Season');
+const BoardEntry = require('../models/BoardEntry');
 const OutboxEvent = require('../models/OutboxEvent');
 const AuditLog = require('../models/AuditLog');
 const User = require('../models/User');
-const { buildIdentity, recomputeAthlete, scopeKeysForLiftDate } = require('../services/boardWrite');
+const {
+  buildIdentity,
+  recomputeAthlete,
+  scopeKeysForLiftDate,
+  runBoardTransaction,
+} = require('../services/boardWrite');
 const { classForBodyweight } = require('../utils/leaderboard/classTable');
 
 /**
@@ -15,6 +20,12 @@ const { classForBodyweight } = require('../utils/leaderboard/classTable');
  * remaining live lifts — a bounded single-user operation, so removal is as
  * cheap as approval and no global recompute is ever needed.
  *
+ * ATOMIC like submit (review round 4): the first version ran
+ * save → recompute → outbox as three unprotected steps, so a crash after
+ * the save left a lift marked `removed` while its numbers stayed on the
+ * board — in the one path whose whole job is correcting the board. Same
+ * runBoardTransaction wrapper, same env-gated dev fallback.
+ *
  * approve — held → live (ranks through the same write path) and/or the
  *           pending badge clears. Approving an already-clean lift is a
  *           no-op success.
@@ -22,16 +33,47 @@ const { classForBodyweight } = require('../utils/leaderboard/classTable');
  *           recomputed without it. Removing twice is a no-op success.
  */
 
+/**
+ * Moderation must not 500 on a profile edit (review round 4): if the
+ * athlete's profile has gone incomplete since they last ranked, derive the
+ * identity from their existing board entries — those carry the exact
+ * denormalized facts the recompute needs.
+ */
+async function identityForModeration(user) {
+  try {
+    return buildIdentity(user);
+  } catch (err) {
+    const anyEntry = await BoardEntry.findOne({ user: user._id }).lean();
+    if (!anyEntry) {
+      err.statusCode = 422;
+      err.message = `Cannot recompute this athlete: ${err.message} (and they have no existing board entries to derive it from)`;
+      throw err;
+    }
+    return {
+      name: anyEntry.name,
+      avatarUrl: anyEntry.avatarUrl,
+      club: anyEntry.club,
+      countryCode: anyEntry.countryCode,
+      sex: anyEntry.sex,
+      birthYear: anyEntry.birthYear,
+    };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // GET /api/review/queue
 // ---------------------------------------------------------------------------
 async function getQueue(req, res) {
   try {
-    const [priority, rest] = await Promise.all([
+    const [priority, rest, priorityTotal, restTotal] = await Promise.all([
       // Pending-badged live lifts first — the athletes driving the
       // competitive loop wait at the FRONT of the queue.
       Lift.find({ status: 'live', pendingReview: true }).sort({ createdAt: 1 }).limit(50).lean(),
       Lift.find({ status: { $in: ['held', 'suspended'] } }).sort({ createdAt: 1 }).limit(50).lean(),
+      // Totals so a backlog past the page size is VISIBLE to the person
+      // working it (review round 4) — queue depth is also a §11 metric.
+      Lift.countDocuments({ status: 'live', pendingReview: true }),
+      Lift.countDocuments({ status: { $in: ['held', 'suspended'] } }),
     ]);
     const liftIds = [...priority, ...rest].map((l) => l._id);
     const flags = await Flag.find({ lift: { $in: liftIds } }).lean();
@@ -68,6 +110,7 @@ async function getQueue(req, res) {
 
     return res.json({
       success: true,
+      totals: { pendingBadge: priorityTotal, heldOrSuspended: restTotal, shown: priority.length + rest.length },
       queue: [...priority.map((l) => row(l, 'pending-badge')), ...rest.map((l) => row(l, 'held-or-suspended'))],
     });
   } catch (err) {
@@ -90,43 +133,64 @@ async function reviewLift(req, res) {
 
     const lift = await Lift.findById(req.params.liftId);
     if (!lift) return res.status(404).json({ success: false, message: 'Lift not found' });
+    if (action === 'approve' && lift.status === 'removed')
+      return res.status(409).json({ success: false, message: 'Lift was removed — submit a new one to re-rank' });
 
     const user = await User.findById(lift.user);
     if (!user) return res.status(404).json({ success: false, message: 'Athlete no longer exists' });
-    const identity = buildIdentity(user);
-    const weightClass = classForBodyweight(lift.bodyweightKg, identity.sex);
 
-    // Idempotent state transitions.
-    if (action === 'approve') {
-      if (lift.status === 'removed')
-        return res.status(409).json({ success: false, message: 'Lift was removed — submit a new one to re-rank' });
-      lift.status = 'live';
-      lift.pendingReview = false;
-      lift.review = { by: req.user._id, at: new Date() };
-    } else {
-      lift.status = 'removed';
-      lift.pendingReview = false;
-      lift.review = { by: req.user._id, at: new Date(), reason };
+    let identity;
+    try {
+      identity = await identityForModeration(user);
+    } catch (err) {
+      return res.status(err.statusCode || 422).json({ success: false, message: err.message });
     }
-    await lift.save();
-
-    // Recompute the athlete in every scope the lift touches; enqueue
-    // renumber for the partitions that changed.
+    const weightClass = classForBodyweight(lift.bodyweightKg, identity.sex);
     const seasons = await Season.find({ status: { $in: ['active', 'grace'] } }).lean();
     const scopeKeys = scopeKeysForLiftDate(lift.liftDate, seasons);
-    const partitions = [];
-    for (const scopeKey of scopeKeys) {
-      const window = scopeKey === 'alltime' ? null : seasons.find((s) => s.key === scopeKey);
-      const touched = await recomputeAthlete(user, scopeKey, window);
-      for (const wc of new Set([...touched, weightClass]))
-        partitions.push({ scopeKey, sex: identity.sex, weightClass: wc });
-    }
-    await OutboxEvent.create({ type: 'renumber', partitions, lift: lift._id });
-    await AuditLog.create({
-      actor: req.user._id,
-      action: action === 'approve' ? 'review.approve' : 'review.remove',
-      subject: lift._id,
-      meta: { reason, scopeKeys },
+
+    // Idempotent state transition + recompute + outbox + audit — atomic.
+    await runBoardTransaction(async (session) => {
+      if (action === 'approve') {
+        lift.status = 'live';
+        lift.pendingReview = false;
+        lift.review = { by: req.user._id, at: new Date() };
+      } else {
+        lift.status = 'removed';
+        lift.pendingReview = false;
+        lift.review = { by: req.user._id, at: new Date(), reason };
+      }
+      await lift.save(session ? { session } : undefined);
+
+      const partitions = [];
+      for (const scopeKey of scopeKeys) {
+        const window = scopeKey === 'alltime' ? null : seasons.find((s) => s.key === scopeKey);
+        const touched = await recomputeAthlete(user, scopeKey, window, session, identity);
+        for (const wc of new Set([...touched, weightClass]))
+          partitions.push({ scopeKey, sex: identity.sex, weightClass: wc });
+      }
+      await OutboxEvent.create(
+        session
+          ? [{ type: 'renumber', partitions, lift: lift._id }]
+          : { type: 'renumber', partitions, lift: lift._id },
+        session ? { session } : undefined
+      );
+      await AuditLog.create(
+        session
+          ? [{
+              actor: req.user._id,
+              action: action === 'approve' ? 'review.approve' : 'review.remove',
+              subject: lift._id,
+              meta: { reason, scopeKeys },
+            }]
+          : {
+              actor: req.user._id,
+              action: action === 'approve' ? 'review.approve' : 'review.remove',
+              subject: lift._id,
+              meta: { reason, scopeKeys },
+            },
+        session ? { session } : undefined
+      );
     });
 
     return res.json({ success: true, lift: { id: lift._id, status: lift.status, pendingReview: lift.pendingReview } });
@@ -136,4 +200,4 @@ async function reviewLift(req, res) {
   }
 }
 
-module.exports = { getQueue, reviewLift };
+module.exports = { getQueue, reviewLift, identityForModeration };
