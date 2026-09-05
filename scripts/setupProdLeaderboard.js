@@ -8,6 +8,7 @@
  * SAFE BY DEFAULT: without APPLY=1 it only PRINTS what it would change.
  *
  *   export MONGODB_URI='<your production connection string>'
+ *   LIST_DBS=1 node scripts/setupProdLeaderboard.js # list cluster databases
  *   node scripts/setupProdLeaderboard.js            # dry run — look first
  *   APPLY=1 node scripts/setupProdLeaderboard.js    # actually write
  */
@@ -36,6 +37,21 @@ async function main() {
 
   await mongoose.connect(uri);
   const dbName = mongoose.connection.name;
+
+  // LIST_DBS=1: just show what databases exist on this cluster, then exit.
+  if (process.env.LIST_DBS === '1') {
+    const res = await mongoose.connection.db
+      .admin()
+      .command({ listDatabases: 1, authorizedDatabases: true });
+    console.log('Databases on this cluster:');
+    for (const d of res.databases) {
+      const mb = (d.sizeOnDisk / 1024 / 1024).toFixed(1);
+      console.log(`  ${d.name}  (${mb} MB)`);
+    }
+    await mongoose.disconnect();
+    return;
+  }
+
   console.log(`Connected to database: ${dbName}`);
   console.log(apply ? 'MODE: APPLY (writing)' : 'MODE: DRY RUN (printing only)\n');
 
