@@ -18,8 +18,13 @@ function check(name, fn) {
 }
 const assert = require('assert');
 
-const { computeEntriesFromLifts, buildIdentity, scopeKeysForLiftDate } = require('../services/boardWrite');
-const { rankOps } = require('../services/renumber');
+const {
+  computeEntriesFromLifts,
+  buildIdentity,
+  reconcileEntries,
+  scopeKeysForLiftDate,
+} = require('../services/boardWrite');
+const { rankOps, retryDelaySeconds } = require('../services/renumber');
 const { crossesPlausibilityCap } = require('../utils/leaderboard/caps');
 const { parseSubmission } = require('../controllers/liftController');
 
@@ -106,6 +111,45 @@ check('pending badge propagates to every entry a pending lift contributes to', (
 check('no lifts → no entries (recompute deletes what submission created)', () =>
   assert.deepStrictEqual(computeEntriesFromLifts([], identity), []));
 
+// --- reconcile: the delete rule, now pure (review round 4 BLOCKER) ---------
+check('BLOCKER regression: first verified lift converts the same-class ghost — NEVER deleted', () => {
+  // The modal onboarding path: provisional 88 ghost, first real lift lands
+  // in 88 → the upsert flipped that very document to provisional:false; the
+  // old code consulted the stale pre-upsert snapshot and deleted it.
+  const existing = [{ _id: 'g1', weightClass: '88', provisional: true }];
+  const desired = [{ weightClass: '88' }];
+  assert.deepStrictEqual(reconcileEntries(existing, desired, true), []);
+});
+check('ghost in a DIFFERENT class is cleared once verified lifts exist (rev 3)', () => {
+  const existing = [{ _id: 'g1', weightClass: '94', provisional: true }];
+  const desired = [{ weightClass: '88' }];
+  const del = reconcileEntries(existing, desired, true);
+  assert.strictEqual(del.length, 1);
+  assert.strictEqual(del[0]._id, 'g1');
+});
+check('ghost is KEPT while the athlete has no live lifts in scope', () => {
+  const existing = [{ _id: 'g1', weightClass: '88', provisional: true }];
+  assert.deepStrictEqual(reconcileEntries(existing, [], false), []);
+});
+check('stale real entry (its lifts removed) is deleted', () => {
+  const existing = [
+    { _id: 'e88', weightClass: '88', provisional: false },
+    { _id: 'e79', weightClass: '79', provisional: false },
+  ];
+  const desired = [{ weightClass: '88' }];
+  const del = reconcileEntries(existing, desired, true);
+  assert.deepStrictEqual(del.map((d) => d._id), ['e79']);
+});
+check('reconcile rule is exactly "delete what was not just written"', () => {
+  // Every class in the desired set survives regardless of its old flags.
+  const existing = [
+    { _id: 'a', weightClass: '79', provisional: true },
+    { _id: 'b', weightClass: '88', provisional: false },
+  ];
+  const desired = [{ weightClass: '79' }, { weightClass: '88' }];
+  assert.deepStrictEqual(reconcileEntries(existing, desired, true), []);
+});
+
 // --- identity gate ----------------------------------------------------------
 check('identity: requires profile sex and IOC countryCode (422s, not silent boards)', () => {
   assert.throws(() => buildIdentity({ name: 'X', profile: { countryCode: 'COL' } }), /sex/);
@@ -148,6 +192,13 @@ check('rankOps triple-replay: once ranks are right, replay produces ZERO writes'
   assert.deepStrictEqual(rankOps(entries, 'totalKg', (e) => e.ranks.total), []);
 });
 
+check('retry backoff: later attempts wait longer, capped at 5 minutes', () => {
+  assert.strictEqual(retryDelaySeconds(1), 5);
+  assert.strictEqual(retryDelaySeconds(2), 20);
+  assert.strictEqual(retryDelaySeconds(4), 80);
+  assert.strictEqual(retryDelaySeconds(20), 300); // cap
+});
+
 // --- plausibility caps ------------------------------------------------------
 check('caps: absurd weights hold, human weights never do', () => {
   assert.strictEqual(crossesPlausibilityCap(231, 'snatch', 'M', '88'), true);
@@ -175,9 +226,17 @@ check('parseSubmission: no video, no rank — and ranges enforced', () => {
 
 // --- model shapes -----------------------------------------------------------
 const OutboxEvent = require('../models/OutboxEvent');
-check('outbox: drain index {status, createdAt} exists', () => {
+check('outbox: atomic claim lifecycle (processing status + availableAt backoff field)', () => {
+  assert.ok(OutboxEvent.schema.path('status').enumValues.includes('processing'));
+  assert.ok('availableAt' in OutboxEvent.schema.paths);
+  assert.ok('claimedAt' in OutboxEvent.schema.paths);
   const idx = OutboxEvent.schema.indexes();
-  assert.ok(idx.some(([keys]) => keys.status === 1 && keys.createdAt === 1));
+  assert.ok(idx.some(([keys]) => keys.status === 1 && keys.availableAt === 1 && keys.createdAt === 1));
+});
+const LiftModel = require('../models/Lift');
+check('lift: {user, status, liftDate} index — recompute cost independent of career length', () => {
+  const idx = LiftModel.schema.indexes();
+  assert.ok(idx.some(([keys]) => keys.user === 1 && keys.status === 1 && keys.liftDate === 1));
 });
 const Flag = require('../models/Flag');
 check('flag: one per user per lift (unique index)', () => {
