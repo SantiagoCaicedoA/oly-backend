@@ -11,6 +11,9 @@
  *   node scripts/setupProdLeaderboard.js            # dry run — look first
  *   APPLY=1 node scripts/setupProdLeaderboard.js    # actually write
  */
+try {
+  require('dotenv').config(); // picks up MONGODB_URI from .env if present
+} catch (_) {}
 const mongoose = require('mongoose');
 
 const EMAIL = 'santiagocaicedo.a@gmail.com';
