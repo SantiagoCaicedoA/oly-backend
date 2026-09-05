@@ -65,17 +65,65 @@ async function renumberPartition({ scopeKey, sex, weightClass }) {
       );
       writes += ops.length;
     }
+
+    // Entries that LOST the metric (their lifts were removed) fall outside
+    // the sorted fetch above and would keep a stale rank forever — wrong
+    // data a later feature would trust (review round 4). Clear it.
+    const cleared = await BoardEntry.updateMany(
+      {
+        scopeKey,
+        sex,
+        weightClass,
+        provisional: false,
+        $or: [{ [m.field]: null }, { [m.field]: { $lte: 0 } }],
+        [m.rankKey]: { $ne: null },
+      },
+      { $set: { [m.rankKey]: null } }
+    );
+    writes += cleared.modifiedCount || 0;
   }
   return writes;
 }
 
-/** Drain pending outbox events, oldest first, serially. Returns count drained. */
+const MAX_ATTEMPTS = 5;
+const REAP_AFTER_MS = 5 * 60 * 1000;
+
+/** PURE: retry backoff in seconds — attempts² × 5s, capped at 5 minutes. */
+function retryDelaySeconds(attempts) {
+  return Math.min(attempts * attempts * 5, 300);
+}
+
+/**
+ * Return crashed claims to the queue: a 'processing' event older than
+ * REAP_AFTER_MS means its worker died mid-drain — idempotent renumbering
+ * makes the re-run safe.
+ */
+async function reapStaleClaims() {
+  const cutoff = new Date(Date.now() - REAP_AFTER_MS);
+  const r = await OutboxEvent.updateMany(
+    { status: 'processing', claimedAt: { $lt: cutoff } },
+    { $set: { status: 'pending', claimedAt: null } }
+  );
+  if (r.modifiedCount) console.warn(`renumber: reaped ${r.modifiedCount} stale claim(s)`);
+  return r.modifiedCount || 0;
+}
+
+/**
+ * Drain available pending events, oldest first, serially.
+ *
+ * The claim is ATOMIC (status → processing): safe with multiple workers in
+ * phase 3, not just under today's serial loop. Failures reschedule with
+ * quadratic backoff so retries land on later ticks instead of burning all
+ * attempts inside one; only MAX_ATTEMPTS genuine failures mark an event
+ * failed (visible for ops).
+ */
 async function drainOutbox(max = 20) {
+  await reapStaleClaims();
   let drained = 0;
   for (let i = 0; i < max; i++) {
     const event = await OutboxEvent.findOneAndUpdate(
-      { status: 'pending' },
-      { $inc: { attempts: 1 } },
+      { status: 'pending', availableAt: { $lte: new Date() } },
+      { $set: { status: 'processing', claimedAt: new Date() }, $inc: { attempts: 1 } },
       { sort: { createdAt: 1 }, new: true }
     );
     if (!event) break;
@@ -85,15 +133,20 @@ async function drainOutbox(max = 20) {
       }
       event.status = 'done';
       event.processedAt = new Date();
+      event.claimedAt = null;
       event.lastError = null;
       await event.save();
       drained++;
     } catch (err) {
-      console.error('renumber: event failed', event._id, err.message);
+      console.error('renumber: event failed', event._id, `attempt ${event.attempts}:`, err.message);
       event.lastError = err.message;
-      // Give up after repeated failures so one poison event can't wedge the
-      // queue; failed events are visible for ops (status: failed).
-      if (event.attempts >= 5) event.status = 'failed';
+      event.claimedAt = null;
+      if (event.attempts >= MAX_ATTEMPTS) {
+        event.status = 'failed';
+      } else {
+        event.status = 'pending';
+        event.availableAt = new Date(Date.now() + retryDelaySeconds(event.attempts) * 1000);
+      }
       await event.save();
     }
   }
@@ -132,6 +185,8 @@ function stopRenumberWorker() {
 module.exports = {
   RANK_METRICS,
   rankOps,
+  retryDelaySeconds,
+  reapStaleClaims,
   renumberPartition,
   drainOutbox,
   startRenumberWorker,

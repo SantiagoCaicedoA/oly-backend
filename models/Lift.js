@@ -46,6 +46,9 @@ const LiftSchema = new Schema(
 );
 
 LiftSchema.index({ user: 1, status: 1, createdAt: -1 });
+// Recompute reads {user, status:'live', liftDate range} — this keeps its
+// cost independent of career length (review round 4: matters in year 3).
+LiftSchema.index({ user: 1, status: 1, liftDate: 1 });
 LiftSchema.index({ status: 1, pendingReview: 1, createdAt: 1 }); // review queue, oldest first
 LiftSchema.index({ user: 1, idemKey: 1 }, { unique: true }); // duplicate-submit guard
 

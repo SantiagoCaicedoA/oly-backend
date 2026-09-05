@@ -53,7 +53,9 @@ function buildIdentity(user) {
         ? new Date().getUTCFullYear() - p.age
         : null;
   return {
-    name: p.display_name || user.name,
+    // findOneAndUpdate does not run schema validators by default, so a
+    // missing name would write through silently — always have one.
+    name: p.display_name || user.name || 'Athlete',
     avatarUrl: p.profile_image_url || null,
     club: p.club || null,
     countryCode,
@@ -80,6 +82,11 @@ function buildIdentity(user) {
  *  - best-lift compare: higher weight wins; equal weight keeps the EARLIER
  *    lift (the athlete who got there first holds the spot — and the entry's
  *    tie-break date never moves backward in fairness).
+ *
+ * CONTRACT (review round 4): pure over `lifts`, but NOT total — it throws
+ * on an unknown (classSetVersion, sex) pair via classForBodyweight. Callers
+ * must pre-validate identity.sex through buildIdentity(); every caller in
+ * this codebase does.
  *
  * @param {Array} lifts   live lifts in scope: {liftType, weightKg, bodyweightKg, liftDate, _id, pendingReview}
  * @param {Object} identity  from buildIdentity()
@@ -187,18 +194,58 @@ function scopeKeysForLiftDate(liftDate, seasons) {
 }
 
 /**
+ * PURE reconcile step (review round 4 — extracted after the blocker):
+ * decide which of the EXISTING entries must be deleted, given the desired
+ * set. The rule is "delete what recompute did not just write":
+ *
+ *  - a class in the desired set was just (re)written — NEVER delete it.
+ *    (The blocker this fixes: the first verified lift converts the
+ *    same-class provisional ghost in place via the upsert; the old code
+ *    consulted the PRE-upsert snapshot's provisional flag and deleted the
+ *    entry it had just written — on the product's modal onboarding path.)
+ *  - a class NOT in the desired set is deleted when it's a stale real
+ *    entry (its lifts were removed), or a provisional ghost that verified
+ *    lifts have superseded (rev 3: first verified lift clears every ghost
+ *    in scope);
+ *  - a ghost is KEPT only while the athlete has no live lifts in scope.
+ *
+ * Pure so the DB-free checks can exercise it — the phase-2 review's core
+ * lesson: the half of recompute that touches the database was the half
+ * with no checks.
+ */
+function reconcileEntries(existing, desired, hasLiveLifts) {
+  const desiredClasses = new Set(desired.map((e) => e.weightClass));
+  const deletions = [];
+  for (const old of existing) {
+    if (desiredClasses.has(old.weightClass)) continue; // just written — keep
+    if (!old.provisional || hasLiveLifts) deletions.push(old);
+  }
+  return deletions;
+}
+
+/**
  * Recompute ONE athlete's entries in ONE scope from their live lifts —
  * the shared idempotent core (submit, restore, remove, anonymize, rebuild).
  *
- * Also clears provisional entries once verified lifts exist in the scope
- * (rev 3: the first verified lift clears EVERY provisional entry the
- * athlete has in that scope).
+ * CONCURRENCY (review round 4 — why concurrent same-user submits are safe,
+ * written down so nobody "optimizes" it away): two simultaneous transactions
+ * both upsert the SAME entry documents (including the heavier-class total
+ * entry in the cross-class case) → WriteConflict → withTransaction aborts
+ * and retries one of them → the retry reads a fresh snapshot that now
+ * includes the other's committed lift → correct. This self-healing depends
+ * on both transactions touching the same document; narrowing the upserts to
+ * "only changed fields/classes" would break it silently. The sequential
+ * fallback (dev-only, env-gated) has NO such protection — which is why it
+ * can never run in production.
  *
+ * @param {Object} identityOverride  optional pre-built identity (review
+ *   path uses entry-derived identity when a profile has gone incomplete —
+ *   moderation must not 500 on a profile edit).
  * @returns {Array<string>} the weight classes whose partitions changed
  *   (for the renumber worker).
  */
-async function recomputeAthlete(user, scopeKey, seasonWindow, session = null) {
-  const identity = buildIdentity(user);
+async function recomputeAthlete(user, scopeKey, seasonWindow, session = null, identityOverride = null) {
+  const identity = identityOverride || buildIdentity(user);
   const liftFilter = { user: user._id, status: 'live' };
   if (seasonWindow) {
     liftFilter.liftDate = { $gte: seasonWindow.startsAt, $lte: seasonWindow.endsAt };
@@ -210,7 +257,6 @@ async function recomputeAthlete(user, scopeKey, seasonWindow, session = null) {
   const existing = await BoardEntry.find({ user: user._id, scopeKey }).lean().session(session || null);
 
   const touched = new Set();
-  const desiredByClass = new Map(desired.map((e) => [e.weightClass, e]));
 
   // Upsert every desired entry.
   for (const e of desired) {
@@ -221,22 +267,50 @@ async function recomputeAthlete(user, scopeKey, seasonWindow, session = null) {
     );
     touched.add(e.weightClass);
   }
-  // Delete entries that should no longer exist: provisional ghosts once any
-  // verified lift exists (rev 3), and real entries whose lifts were removed.
-  for (const old of existing) {
-    const stillWanted = desiredByClass.has(old.weightClass);
-    const provisionalGhost = old.provisional && lifts.length > 0;
-    if ((!stillWanted && !old.provisional) || provisionalGhost) {
-      await BoardEntry.deleteOne({ _id: old._id }, opts);
-      touched.add(old.weightClass);
-    }
+  // Delete only what recompute did not just write (pure rule above).
+  for (const old of reconcileEntries(existing, desired, lifts.length > 0)) {
+    await BoardEntry.deleteOne({ _id: old._id }, opts);
+    touched.add(old.weightClass);
   }
   return [...touched];
+}
+
+/**
+ * Board-mutation transaction wrapper (review round 4): atomicity is decided
+ * by OPERATOR INTENT, never by regex-matching an error message at runtime —
+ * the first version fell back to non-atomic sequential writes whenever an
+ * error mentioned replica sets, which an Atlas failover can do; a submit
+ * failing partway through then left a Lift with no BoardEntry, no outbox
+ * event, and no repair path short of rebuildBoards.
+ *
+ * Rule: transactions are REQUIRED. Only a standalone dev Mongo, with
+ * ALLOW_NON_TRANSACTIONAL=1 set explicitly, may run the same writes
+ * sequentially — and only when the error is actually the no-replica-set
+ * class. Production can never silently take that branch.
+ */
+const mongoose = require('mongoose');
+async function runBoardTransaction(fn) {
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(() => fn(session));
+  } catch (err) {
+    const txnUnsupported = /replica set|Transaction numbers/i.test(err.message || '');
+    if (txnUnsupported && process.env.ALLOW_NON_TRANSACTIONAL === '1') {
+      console.warn('boardWrite: transactions unavailable — SEQUENTIAL fallback (dev only, ALLOW_NON_TRANSACTIONAL=1)');
+      await fn(null);
+    } else {
+      throw err;
+    }
+  } finally {
+    session.endSession();
+  }
 }
 
 module.exports = {
   buildIdentity,
   computeEntriesFromLifts,
+  reconcileEntries,
   scopeKeysForLiftDate,
   recomputeAthlete,
+  runBoardTransaction,
 };
