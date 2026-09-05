@@ -67,6 +67,14 @@ const PORT = process.env.PORT || 8080;
 async function start() {
   await connectDB();
 
+  // Leaderboard rank-renumber worker (phase 2): drains the outbox and
+  // keeps materialized class-partition ranks current. In-process interval
+  // loop — correct on the single-instance deployment the boardCache guard
+  // enforces; phase 3 moves it to its own process.
+  const { startRenumberWorker } = require('./services/renumber');
+  startRenumberWorker();
+  console.log('Leaderboard renumber worker started (3s interval)');
+
   app.listen(PORT, () => {
     console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
 

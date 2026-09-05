@@ -12,6 +12,8 @@ const followRoutes = require('./followRoutes');
 const leaderboardRoutes = require('./leaderboardRoutes');
 const seasonRoutes = require('./seasonRoutes');
 const athleteRoutes = require('./athleteRoutes');
+const liftRoutes = require('./liftRoutes');
+const reviewRoutes = require('./reviewRoutes');
 
 // API Routes
 router.use('/users', userRoutes);
@@ -26,6 +28,8 @@ router.use('/follow', followRoutes);
 router.use('/leaderboard', leaderboardRoutes);
 router.use('/seasons', seasonRoutes);
 router.use('/athletes', athleteRoutes);
+router.use('/lifts', liftRoutes);
+router.use('/review', reviewRoutes);
 
 // Health check route
 router.get('/health', (req, res) => {

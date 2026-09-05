@@ -162,6 +162,7 @@ function entryToRow(entry, lift, rank) {
     cleanKg: lift === 'total' || lift === 'sinclair' ? entry.totalCleanKg : entry.bestCleanKg,
     bodyweightKg,
     sinclair: entry.sinclair,
+    pendingReview: !!entry.pendingReview, // visible badge (§5) — row ranks normally
     achievedAt: entry[m.tie],
   };
 }
