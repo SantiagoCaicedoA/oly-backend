@@ -36,6 +36,10 @@ const ENUMS = {
     values: ['returning', 'light', 'steady', 'heavy'],
     key: (v) => (v && String(v).toLowerCase().trim()),
   },
+  recovery_profile: {
+    values: ['fast', 'average', 'slow'],
+    key: (v) => (v && String(v).toLowerCase().trim()),
+  },
 };
 
 function findMatch(input, { values, key }) {
@@ -57,6 +61,28 @@ function normalizeTopLevel(obj) {
   if (obj.training_preference !== undefined) obj.training_preference = findMatch(obj.training_preference, ENUMS.training_preference);
   if (obj.training_phase !== undefined) obj.training_phase = findMatch(obj.training_phase, ENUMS.training_phase);
   if (obj.recent_training_volume !== undefined) obj.recent_training_volume = findMatch(obj.recent_training_volume, ENUMS.recent_training_volume);
+  if (obj.recovery_profile !== undefined) obj.recovery_profile = findMatch(obj.recovery_profile, ENUMS.recovery_profile);
+}
+
+/**
+ * Optional means optional: an empty string is never a meaningful profile
+ * value, but it trips Mongoose enum validation ("`` is not a valid enum
+ * value"). Recursively drop empty-string fields (and empty-string array
+ * entries) so a skipped optional question can never fail the whole submit.
+ */
+function stripEmptyStrings(obj) {
+  if (!obj || typeof obj !== 'object') return;
+  for (const key of Object.keys(obj)) {
+    const v = obj[key];
+    if (typeof v === 'string' && v.trim() === '') {
+      delete obj[key];
+    } else if (Array.isArray(v)) {
+      obj[key] = v.filter((item) => !(typeof item === 'string' && item.trim() === ''));
+      obj[key].forEach((item) => stripEmptyStrings(item));
+    } else if (v && typeof v === 'object') {
+      stripEmptyStrings(v);
+    }
+  }
 }
 
 const impactLevel = { values: ['Mild', 'Moderate', 'High'], key: (v) => (v && String(v).toLowerCase()) };
@@ -93,6 +119,7 @@ function strengthStatsToSectioned(strengthStats) {
 
 function normalizeProfilePayload(obj) {
   if (!obj || typeof obj !== 'object') return obj;
+  stripEmptyStrings(obj);
   normalizeTopLevel(obj);
   if (obj.considerations && typeof obj.considerations === 'object' && obj.considerations.impact_level !== undefined) {
     obj.considerations.impact_level = findMatch(obj.considerations.impact_level, impactLevel);
