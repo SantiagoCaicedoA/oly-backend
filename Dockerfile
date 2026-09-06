@@ -20,6 +20,11 @@ RUN node -e "require('iconv-lite').getCodec('utf-8'); require('express'); requir
 # Copy application source
 COPY . .
 
+# Deploy fingerprint — surfaced by GET /api/health as "build" so we can
+# always verify which build is actually serving the domain
+ARG GIT_SHA=unknown
+ENV BUILD_SHA=$GIT_SHA
+
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 && \
