@@ -12,6 +12,11 @@ COPY package.json package-lock.json* ./
 # Install production dependencies only
 RUN npm ci --only=production && npm cache clean --force
 
+# Build-time sanity check: a partially-installed node_modules must FAIL the
+# build, never ship. (A prod image once shipped with iconv-lite missing its
+# encodings/ folder, which 500'd every request with a JSON body.)
+RUN node -e "require('iconv-lite').getCodec('utf-8'); require('express'); require('mongoose'); console.log('deps sanity OK')"
+
 # Copy application source
 COPY . .
 
