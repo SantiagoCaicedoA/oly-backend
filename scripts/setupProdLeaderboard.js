@@ -21,9 +21,11 @@ const EMAIL = 'santiagocaicedo.a@gmail.com';
 const IDENTITY = { countryCode: 'COL', birth_year: 2000 }; // club: none (Independent)
 
 // Season 1 — 4-month window (design doc §4.3), UTC.
+// Naming: plate-color cycle (Red -> Blue -> Yellow, then repeats), anchored
+// so the inaugural season is Red. Keys stay mechanical (S1, S2, ...).
 const SEASON = {
   key: 'S1',
-  label: 'Season 1',
+  label: "Red Season '26",
   startsAt: new Date('2026-09-01T00:00:00Z'),
   endsAt: new Date('2027-01-01T00:00:00Z'),
   snapshotAt: new Date('2027-01-08T00:00:00Z'), // endsAt + 7d grace
