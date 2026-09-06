@@ -2,6 +2,8 @@
  * Normalize profile enum fields so frontend can send "male", "KG" etc.
  * and we store schema-canonical values: "Male", "kg".
  */
+const { iocCodeForCountry } = require('./iocCountryCodes');
+
 const ENUMS = {
   sex: { values: ['Male', 'Female', 'Other'], key: (v) => (v && String(v).toLowerCase()) },
   // Accept "lb", "LB", "lbs", "kg", "KG" etc. – store as "kg" or "lbs"
@@ -121,6 +123,13 @@ function normalizeProfilePayload(obj) {
   if (!obj || typeof obj !== 'object') return obj;
   stripEmptyStrings(obj);
   normalizeTopLevel(obj);
+  // Leaderboard identity bridge: onboarding sends a country NAME
+  // ("Colombia") but board entries need the IOC code ("COL"). Derive it
+  // whenever a name is present and no code was sent explicitly.
+  if (obj.country && !obj.countryCode) {
+    const code = iocCodeForCountry(obj.country);
+    if (code) obj.countryCode = code;
+  }
   if (obj.considerations && typeof obj.considerations === 'object' && obj.considerations.impact_level !== undefined) {
     obj.considerations.impact_level = findMatch(obj.considerations.impact_level, impactLevel);
   }
