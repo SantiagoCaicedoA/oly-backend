@@ -31,12 +31,22 @@ router.use('/athletes', athleteRoutes);
 router.use('/lifts', liftRoutes);
 router.use('/review', reviewRoutes);
 
-// Health check route
+// Health check route — carries a deploy fingerprint so we can verify from
+// outside WHICH build is serving the domain and whether its node_modules
+// are intact (a corrupted image once served with iconv-lite broken).
 router.get('/health', (req, res) => {
+  let iconvOk = false;
+  try {
+    require('iconv-lite').getCodec('utf-8');
+    iconvOk = true;
+  } catch (_) {}
   res.status(200).json({
     success: true,
     message: 'API is running',
     timestamp: new Date().toISOString(),
+    build: process.env.BUILD_SHA || 'unknown',
+    startedAt: process.uptime ? new Date(Date.now() - process.uptime() * 1000).toISOString() : null,
+    iconvOk,
   });
 });
 
