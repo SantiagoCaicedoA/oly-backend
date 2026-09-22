@@ -37,6 +37,16 @@ const auth = async (req, res, next) => {
             });
         }
 
+        // A deleted account keeps its document (Lift/BoardEntry reference it),
+        // so tokens issued before deletion stay cryptographically valid. Refuse
+        // them here or the account remains fully usable after "deletion".
+        if (user.anonymizedAt) {
+            return res.status(401).json({
+                success: false,
+                message: 'This account has been deleted',
+            });
+        }
+
         req.user = user;
         next();
     } catch (err) {

@@ -111,7 +111,9 @@ const userSchema = new Schema(
       trim: true,
       lowercase: true, // case-insensitive handles (Instagram-style): stored lowercased
       unique: true,
-      sparse: true, // allow null/empty without unique conflict
+      // Sparse skips MISSING fields only — an explicit null IS indexed and
+      // will collide. Clear a handle by unsetting it, never by writing null.
+      sparse: true,
     },
     email: {
       type: String,
@@ -132,6 +134,11 @@ const userSchema = new Schema(
     // Review-queue access (phase 2). Manual flag — one reviewer today; a
     // roles system is deliberately premature.
     isAdmin: { type: Boolean, default: false },
+    // Set when the account is deleted. The document survives because
+    // Lift and BoardEntry reference it, so this is what marks the account
+    // dead: auth, refresh and signin all refuse it, and buildIdentity
+    // derives BoardEntry.anonymized from it.
+    anonymizedAt: { type: Date, default: null },
     // Product tier — 'personalized' unlocks the rolling AI coach; 'free' runs the deterministic Oly Team plan.
     subscription: {
       tier: { type: String, enum: ['free', 'personalized'], default: 'free' },

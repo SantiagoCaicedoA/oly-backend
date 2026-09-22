@@ -74,6 +74,9 @@ const BoardEntrySchema = new Schema(
     name: { type: String, required: true },
     avatarUrl: { type: String, default: null },
     club: { type: String, default: null },
+    // Set when the athlete deletes their account. The result stays on the
+    // board (other athletes earned it), the identity does not.
+    anonymized: { type: Boolean, default: false },
     countryCode: { type: String, required: true }, // IOC code
     sex: { type: String, enum: ['M', 'F'], required: true },
     birthYear: { type: Number, default: null }, // never exposed raw via the API
