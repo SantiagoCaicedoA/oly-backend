@@ -61,6 +61,10 @@ function buildIdentity(user) {
     countryCode,
     sex,
     birthYear,
+    // Derived, not stored-only: without this a recreated entry or a full
+    // rebuildBoards run would drop the flag and the row would lose its
+    // INACTIVE tag while still reading "Former athlete".
+    anonymized: !!(user && user.anonymizedAt),
   };
 }
 

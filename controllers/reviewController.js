@@ -56,6 +56,7 @@ async function identityForModeration(user) {
       countryCode: anyEntry.countryCode,
       sex: anyEntry.sex,
       birthYear: anyEntry.birthYear,
+      anonymized: !!anyEntry.anonymized,
     };
   }
 }
