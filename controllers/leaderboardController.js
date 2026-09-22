@@ -151,6 +151,7 @@ function entryToRow(entry, lift, rank) {
       name: entry.name,
       avatarUrl: entry.avatarUrl,
       club: entry.club,
+      anonymized: !!entry.anonymized,
       countryCode: entry.countryCode,
       sex: entry.sex,
       weightClass: entry.weightClass,
@@ -449,7 +450,17 @@ async function getAthleteCard(req, res) {
       Follow.exists({ follower: req.user._id, following: entry.user }),
     ]);
     const byId = Object.fromEntries(lifts.map((l) => [String(l._id), l]));
-    const pick = (id) => (id ? byId[String(id)] || null : null);
+    // A deleted athlete keeps the RESULT (other lifters earned it) but must
+    // stop being identifiable. The S3 objects are not removed yet —
+    // s3Service has no delete path — so withhold the URL here, otherwise
+    // "Former athlete" still ships with their face on video.
+    const isAnon = !!entry.anonymized;
+    const pick = (id) => {
+      if (!id) return null;
+      const lift = byId[String(id)] || null;
+      if (!lift) return null;
+      return isAnon ? { ...lift, videoUrl: null } : lift;
+    };
 
     return res.json({
       season: seasonMeta(season),
@@ -457,6 +468,7 @@ async function getAthleteCard(req, res) {
         id: entry.user,
         name: entry.name,
         avatarUrl: entry.avatarUrl,
+        anonymized: !!entry.anonymized,
         club: entry.club,
         countryCode: entry.countryCode,
         sex: entry.sex,

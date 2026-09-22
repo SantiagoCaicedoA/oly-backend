@@ -17,6 +17,9 @@ async function runSundayCron() {
 
   const users = await User.find({
     'profile.availability.training_days_per_week': { $exists: true, $gte: 1 },
+    // Deleted accounts keep their document so the board stays intact, but
+    // they must not keep consuming the generator every week.
+    anonymizedAt: null,
   }).lean();
 
   console.log(`Found ${users.length} users with completed onboarding`);

@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const userService = require('../services/userService');
 const { formatUserResponse } = require('../utils/profileResponse');
+const { anonymizeUser } = require('../services/accountAnonymize');
 
 class UserController {
   /**
@@ -175,6 +176,15 @@ class UserController {
           });
         }
 
+        // Without this a deleted account mints itself a fresh pair of 30-day
+        // tokens on every call, so the session never actually ends.
+        if (user.anonymizedAt) {
+          return res.status(401).json({
+            success: false,
+            message: 'This account has been deleted',
+          });
+        }
+
         const token = user.getSignedJwtToken();
         const newRefreshToken = user.getSignedRefreshToken();
 
@@ -204,10 +214,35 @@ class UserController {
   async deleteUser(req, res, next) {
     try {
       const { id } = req.params;
-      await userService.deleteUser(id);
+      // Anonymize rather than erase. A hard delete orphans every Lift and
+      // BoardEntry that references this user, which leaves broken rows on
+      // the public board. See services/accountAnonymize.js.
+      const result = await anonymizeUser(id, req.user && req.user._id);
+      if (!result.ok) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
       res.status(200).json({
         success: true,
-        message: 'User deleted successfully',
+        message: 'Account deleted',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * DELETE /api/users/me — delete the signed-in account.
+   * The app calls this so it never has to know its own id.
+   */
+  async deleteMe(req, res, next) {
+    try {
+      const result = await anonymizeUser(req.user._id, req.user._id);
+      if (!result.ok) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+      res.status(200).json({
+        success: true,
+        message: 'Account deleted',
       });
     } catch (error) {
       next(error);

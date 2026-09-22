@@ -80,6 +80,8 @@ router.put(
   validate,
   userController.updateUser.bind(userController)
 );
+// '/me' must be declared before '/:id' or Express treats "me" as an id.
+router.delete('/me', auth, userController.deleteMe.bind(userController));
 router.delete('/:id', auth, requireSelf, userController.deleteUser.bind(userController));
 
 module.exports = router;

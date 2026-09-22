@@ -63,6 +63,12 @@ class UserService {
     if (!user || !(await user.matchPassword(password))) {
       throw new AppError(401, 'Invalid email or password');
     }
+    // Deleted accounts keep their document, so they would otherwise still
+    // authenticate. The tombstone email makes this unreachable in practice,
+    // but do not depend on that.
+    if (user.anonymizedAt) {
+      throw new AppError(401, 'Invalid email or password');
+    }
     return user;
   }
 
@@ -74,22 +80,34 @@ class UserService {
    */
   async updateUser(userId, updateData) {
     try {
-      const allowed = {};
-      if (updateData.name !== undefined) allowed.name = updateData.name;
-      if (updateData.username !== undefined) allowed.username = updateData.username !== '' ? updateData.username : null;
-      if (updateData.email !== undefined) allowed.email = updateData.email;
-      if (updateData.password !== undefined) allowed.password = updateData.password;
-
-      const user = await User.findByIdAndUpdate(
-        userId,
-        { $set: allowed },
-        { new: true, runValidators: true }
-      ).select('-password');
-
+      const user = await User.findById(userId);
       if (!user) {
         throw new AppError(404, 'User not found');
       }
-      return user;
+
+      if (updateData.name !== undefined) user.name = updateData.name;
+      if (updateData.email !== undefined) user.email = updateData.email;
+
+      // Clearing a handle must UNSET the field. A sparse unique index still
+      // indexes an explicit null, so writing null meant the SECOND user to
+      // clear their username collided with the first and got a misleading
+      // "that username is already taken".
+      if (updateData.username !== undefined) {
+        user.username =
+          updateData.username !== '' ? updateData.username : undefined;
+      }
+
+      // Assign and save so userSchema.pre('save') hashes it. The previous
+      // findByIdAndUpdate bypassed that hook and stored the password in
+      // PLAINTEXT, after which bcrypt compare failed and the user was
+      // locked out of their own account.
+      if (updateData.password !== undefined) user.password = updateData.password;
+
+      await user.save();
+
+      const out = user.toObject();
+      delete out.password;
+      return out;
     } catch (error) {
       if (error instanceof AppError) throw error;
       if (error.code === 11000) {
@@ -106,18 +124,6 @@ class UserService {
     }
   }
 
-  /**
-   * Delete user by ID
-   * @param {string} userId
-   * @returns {Promise<Object>}
-   */
-  async deleteUser(userId) {
-    const user = await User.findByIdAndDelete(userId);
-    if (!user) {
-      throw new AppError(404, 'User not found');
-    }
-    return { message: 'User deleted successfully' };
-  }
 }
 
 module.exports = new UserService();
