@@ -179,12 +179,28 @@ const probe = (file) =>
     assert.ok(!cleaned.includes('GPSLatitude'), 'fill byte still defeats the stripper');
   });
 
-  await step('REGRESSION: a mislabelled file is rejected, not waved through', async () => {
+  await step('REGRESSION: a mislabelled file is cleaned by its real type, not its label', async () => {
     // A JPEG declared image/png used to pass both allow-lists and come out of
-    // the PNG stripper byte-identical, GPS and all.
-    const jpg = fs.readFileSync(path.join(TMP, 'src.jpg'));
-    assert.throws(() => stripImageMetadata(jpg, 'image/png'), /does not match its declared type/);
-    assert.strictEqual(sniffImageType(jpg), 'image/jpeg', 'sniffing is wrong');
+    // the PNG stripper byte-identical, GPS and all. It must now be cleaned as
+    // a JPEG. It must NOT be rejected: the app sends
+    // `asset.mimeType ?? 'image/jpeg'`, so an honest PNG can arrive labelled
+    // JPEG and a real person would lose a working upload.
+    const raw = fs.readFileSync(path.join(TMP, 'src.jpg'));
+    const payload = Buffer.concat([
+      Buffer.from('Exif\0\0', 'ascii'),
+      Buffer.from('GPSLatitude 40.7128', 'ascii'),
+    ]);
+    const h = Buffer.alloc(4);
+    h.writeUInt16BE(0xffe1, 0);
+    h.writeUInt16BE(payload.length + 2, 2);
+    const jpgWithExif = Buffer.concat([raw.subarray(0, 2), h, payload, raw.subarray(2)]);
+
+    const cleaned = stripImageMetadata(jpgWithExif, 'image/png'); // wrong label on purpose
+    assert.ok(!cleaned.includes('GPSLatitude'), 'wrong label still defeats the stripper');
+    assert.strictEqual(sniffImageType(cleaned), 'image/jpeg', 'sniffing is wrong');
+
+    const png = fs.readFileSync(path.join(TMP, 'src.png'));
+    assert.doesNotThrow(() => stripImageMetadata(png, 'image/jpeg'), 'a real upload was rejected');
   });
 
   await step('REGRESSION: GIF is refused rather than silently stored uncleaned', async () => {

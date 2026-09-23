@@ -12,7 +12,7 @@ const s3Client = new S3Client({
   },
 });
 
-const { stripImageMetadata } = require('../utils/stripImageMetadata');
+const { stripImageMetadata, sniffImageType } = require('../utils/stripImageMetadata');
 const { stripVideoMetadata } = require('../utils/stripVideoMetadata');
 
 /**
@@ -29,12 +29,16 @@ const { stripVideoMetadata } = require('../utils/stripVideoMetadata');
  */
 async function putClean(bucket, key, buffer, mimeType) {
   let body = buffer;
+  let contentType = mimeType;
   if (String(mimeType).startsWith('video/')) {
     // Throws if it cannot be cleaned. A video that keeps its coordinates is
     // worse than an upload the athlete has to retry.
     body = await stripVideoMetadata(buffer, mimeType);
   } else if (String(mimeType).startsWith('image/')) {
     body = stripImageMetadata(buffer, mimeType);
+    // Serve it as what it actually is. A PNG stored with ContentType
+    // image/jpeg renders in most browsers and breaks in some.
+    contentType = sniffImageType(body) || mimeType;
   }
 
   await s3Client.send(
@@ -42,7 +46,7 @@ async function putClean(bucket, key, buffer, mimeType) {
       Bucket: bucket,
       Key: key,
       Body: body,
-      ContentType: mimeType,
+      ContentType: contentType,
     })
   );
 }
