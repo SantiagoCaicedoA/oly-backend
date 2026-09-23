@@ -3,6 +3,11 @@
 
 FROM node:20-alpine
 
+# ffmpeg rewrites uploaded videos to strip camera metadata (GPS lives in the
+# QuickTime container on every iPhone clip). It is stream-copy only, no
+# re-encoding, so it costs image size rather than CPU.
+RUN apk add --no-cache ffmpeg
+
 # Create app directory
 WORKDIR /app
 
@@ -16,6 +21,10 @@ RUN npm ci --only=production && npm cache clean --force
 # build, never ship. (A prod image once shipped with iconv-lite missing its
 # encodings/ folder, which 500'd every request with a JSON body.)
 RUN node -e "require('iconv-lite').getCodec('utf-8'); require('express'); require('mongoose'); console.log('deps sanity OK')"
+
+# Video uploads are REJECTED when ffmpeg is missing, so a build without it
+# must fail here rather than in production at 2am.
+RUN ffmpeg -version > /dev/null && echo 'ffmpeg sanity OK'
 
 # Copy application source
 COPY . .
