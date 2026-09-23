@@ -107,7 +107,7 @@ async function main() {
   partitions.forEach((p) => console.log(`  ${p.scopeKey} ${p.sex} ${p.weightClass}`));
   if (apply) {
     for (const p of partitions) {
-      const writes = await renumberPartition(p);
+      const { writes } = await renumberPartition(p);
       console.log(`  renumbered ${p.scopeKey} ${p.sex} ${p.weightClass} (${writes} writes)`);
     }
   }

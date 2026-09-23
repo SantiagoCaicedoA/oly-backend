@@ -99,6 +99,16 @@ async function start() {
     } else {
       console.warn('No LLM API key set (ANTHROPIC_API_KEY / OPENAI_API_KEY) — training crons NOT scheduled.');
     }
+
+    // Notification delivery. Deliberately NOT gated on an API key: Expo needs
+    // no credential to send, and a worker that silently does not start is how
+    // notifications quietly stop working with nothing in the logs.
+    // NOTIFICATIONS_OFF=1 disables it for a one-off task that should not send.
+    if (process.env.NOTIFICATIONS_OFF !== '1') {
+      require('./jobs/notificationWorker').start();
+    } else {
+      console.warn('NOTIFICATIONS_OFF=1 — notification worker NOT started.');
+    }
   });
 }
 

@@ -16,6 +16,7 @@ const liftRoutes = require('./liftRoutes');
 const reviewRoutes = require('./reviewRoutes');
 const blockRoutes = require('./blockRoutes');
 const privacyRoutes = require('./privacyRoutes');
+const notificationRoutes = require('./notificationRoutes');
 const reportRoutes = require('./reportRoutes');
 
 // API Routes
@@ -35,6 +36,7 @@ router.use('/lifts', liftRoutes);
 router.use('/review', reviewRoutes);
 router.use('/blocks', blockRoutes);
 router.use('/privacy', privacyRoutes);
+router.use('/notifications', notificationRoutes);
 router.use('/reports', reportRoutes);
 
 // Health check route — carries a deploy fingerprint so we can verify from

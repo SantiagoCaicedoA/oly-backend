@@ -7,6 +7,7 @@ const Follow = require('../models/Follow');
 const { uploadPostVideo, uploadPostThumbnail } = require('../services/s3Service');
 const { stripImageMetadata, sniffImageType } = require('../utils/stripImageMetadata');
 const { blockedIdSet } = require('../services/blocks');
+const { notify } = require('../services/notifications');
 const { resolveLiftId, isLiftId, displayName } = require('../utils/liftCatalog');
 
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'images');
@@ -588,6 +589,15 @@ class PostController {
       // Get updated like count
       const likeCount = await Like.countDocuments({ post: id });
 
+      // Fire and forget. notify() swallows its own errors, and a like that
+      // fails to notify is still a like: taking down this endpoint because
+      // the push queue hiccuped would be a far worse trade.
+      notify(post.user, 'like', {
+        actor: req.user,
+        postId: String(post._id),
+        data: { postId: String(post._id) },
+      });
+
       res.status(200).json({
         success: true,
         message: 'Post liked successfully',
@@ -658,9 +668,11 @@ class PostController {
         });
       }
 
-      // If it's a reply, verify parent comment exists
+      // If it's a reply, verify parent comment exists. Declared out here
+      // because the notification below needs to know who is being replied to.
+      let parent = null;
       if (parentComment) {
-        const parent = await Comment.findById(parentComment);
+        parent = await Comment.findById(parentComment);
         if (!parent) {
           return res.status(404).json({
             success: false,
@@ -681,6 +693,17 @@ class PostController {
 
       // Get updated comment count
       const commentCount = await Comment.countDocuments({ post: id });
+
+      // A reply notifies the person replied to; a top-level comment notifies
+      // the post's author. Without the first case, replying to someone in a
+      // thread is shouting into a void.
+      const recipient = parent ? parent.user : post.user;
+      notify(recipient, 'comment', {
+        actor: req.user,
+        postId: String(post._id),
+        text: comment.text,
+        data: { postId: String(post._id), commentId: String(comment._id) },
+      });
 
       res.status(201).json({
         success: true,

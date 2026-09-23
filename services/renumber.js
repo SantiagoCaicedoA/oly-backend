@@ -34,14 +34,26 @@ function rankOps(sortedEntries, metricField, currentRankOf) {
   let rank = 0;
   for (const e of sortedEntries) {
     const desired = e[metricField] > 0 ? ++rank : null;
-    if (currentRankOf(e) !== desired) ops.push({ _id: e._id, rank: desired });
+    // `from` is carried so a caller can tell a promotion from a demotion
+    // without recomputing anything. It costs one field on an array that only
+    // ever holds entries that actually moved.
+    if (currentRankOf(e) !== desired)
+      ops.push({ _id: e._id, rank: desired, from: currentRankOf(e), user: e.user });
   }
   return ops;
 }
 
 /** Renumber one (scopeKey, sex, weightClass) partition for all three metrics. */
+/**
+ * Renumber a partition, and report who moved.
+ *
+ * The rank changes are RETURNED rather than notified here. rebuildBoards
+ * calls this too, and a rebuild that told every athlete in the sport they
+ * moved would be unforgivable. Only the live drain acts on them.
+ */
 async function renumberPartition({ scopeKey, sex, weightClass }) {
   let writes = 0;
+  const changes = [];
   for (const m of RANK_METRICS) {
     const entries = await BoardEntry.find({
       scopeKey,
@@ -51,7 +63,7 @@ async function renumberPartition({ scopeKey, sex, weightClass }) {
       [m.field]: { $gt: 0 },
     })
       .sort({ [m.field]: -1, [m.tie]: 1, user: 1 })
-      .select(`_id ${m.field} ranks`)
+      .select(`_id user ${m.field} ranks`)
       .lean();
 
     const key = m.rankKey.split('.')[1];
@@ -64,6 +76,14 @@ async function renumberPartition({ scopeKey, sex, weightClass }) {
         { ordered: false }
       );
       writes += ops.length;
+      // Only the total board, and only the all-time scope. Reporting every
+      // metric in every scope would be six notifications for one lift, which
+      // is how a useful trigger becomes a muted one.
+      if (key === 'total' && scopeKey === 'alltime') {
+        for (const op of ops) {
+          if (op.user) changes.push({ user: op.user, from: op.from, to: op.rank, weightClass, sex });
+        }
+      }
     }
 
     // Entries that LOST the metric (their lifts were removed) fall outside
@@ -82,7 +102,59 @@ async function renumberPartition({ scopeKey, sex, weightClass }) {
     );
     writes += cleared.modifiedCount || 0;
   }
-  return writes;
+  return { writes, changes };
+}
+
+/**
+ * Tell athletes their rank moved.
+ *
+ * Two rules, both about not becoming noise:
+ *  - An athlete appearing on the board for the first time (from null) has
+ *    not "moved up". That is their first entry, and the lift_verified
+ *    notification already covered the moment.
+ *  - The person whose lift caused the shake-up is not told they were passed
+ *    by themselves.
+ */
+async function announceRankChanges(changes, liftId) {
+  if (!changes || !changes.length) return;
+  try {
+    const { notify } = require('./notifications');
+    const Lift = require('../models/Lift');
+    const User = require('../models/User');
+
+    // Who caused this, so "someone passed you" can use their name.
+    let actor = null;
+    if (liftId) {
+      const lift = await Lift.findById(liftId).select('user').lean();
+      if (lift) actor = await User.findById(lift.user).select('name profile.display_name').lean();
+    }
+    const actorId = actor ? String(actor._id) : null;
+
+    for (const c of changes) {
+      if (c.from == null) continue; // first appearance, not a move
+      if (actorId && String(c.user) === actorId) continue; // not by yourself
+      const label = `${c.sex === 'F' ? 'W' : 'M'} ${c.weightClass}`;
+      if (c.to < c.from) {
+        await notify(c.user, 'rank_up', {
+          places: c.from - c.to,
+          rank: c.to,
+          weightClass: label,
+          data: { weightClass: c.weightClass, sex: c.sex },
+        });
+      } else {
+        await notify(c.user, 'rank_down', {
+          actor,
+          rank: c.to,
+          weightClass: label,
+          data: { weightClass: c.weightClass, sex: c.sex },
+        });
+      }
+    }
+  } catch (err) {
+    // A board that renumbered correctly must not be reported as failed
+    // because a notification could not be written.
+    console.error('announceRankChanges failed', err);
+  }
 }
 
 const MAX_ATTEMPTS = 5;
@@ -128,8 +200,10 @@ async function drainOutbox(max = 20) {
     );
     if (!event) break;
     try {
+      const moved = [];
       for (const p of event.partitions) {
-        await renumberPartition(p);
+        const { changes } = await renumberPartition(p);
+        moved.push(...changes);
       }
       event.status = 'done';
       event.processedAt = new Date();
@@ -137,6 +211,10 @@ async function drainOutbox(max = 20) {
       event.lastError = null;
       await event.save();
       drained++;
+      // After the event is marked done, so a notification failure can never
+      // cause the same board change to be renumbered (and re-announced) on a
+      // retry. notify() swallows its own errors anyway.
+      await announceRankChanges(moved, event.lift);
     } catch (err) {
       console.error('renumber: event failed', event._id, `attempt ${event.attempts}:`, err.message);
       event.lastError = err.message;

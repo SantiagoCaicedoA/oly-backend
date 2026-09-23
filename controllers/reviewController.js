@@ -4,6 +4,11 @@ const Season = require('../models/Season');
 const BoardEntry = require('../models/BoardEntry');
 const OutboxEvent = require('../models/OutboxEvent');
 const AuditLog = require('../models/AuditLog');
+const { notify } = require('../services/notifications');
+
+// How a lift reads in a notification. "Your cleanjerk at 150kg" is not how
+// anybody says it.
+const LIFT_LABEL = { snatch: 'snatch', cleanjerk: 'clean & jerk' };
 const User = require('../models/User');
 const {
   buildIdentity,
@@ -198,6 +203,15 @@ async function reviewLift(req, res) {
       );
     });
 
+    // AFTER the transaction commits. Notifying inside it would mean a phone
+    // buzzing about a decision that then rolled back.
+    notify(lift.user, action === 'approve' ? 'lift_verified' : 'lift_rejected', {
+      liftLabel: LIFT_LABEL[lift.liftType] || lift.liftType,
+      weightKg: lift.weightKg,
+      reason,
+      data: { liftId: String(lift._id) },
+    });
+
     return res.json({ success: true, lift: { id: lift._id, status: lift.status, pendingReview: lift.pendingReview } });
   } catch (err) {
     console.error('reviewLift error:', err);
@@ -205,4 +219,4 @@ async function reviewLift(req, res) {
   }
 }
 
-module.exports = { getQueue, reviewLift, identityForModeration };
+module.exports = { getQueue, reviewLift, identityForModeration, LIFT_LABEL };

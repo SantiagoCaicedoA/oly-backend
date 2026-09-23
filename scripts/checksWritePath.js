@@ -172,12 +172,21 @@ check('scopeKeys: alltime always; season only when liftDate inside an open windo
 // --- renumber math ----------------------------------------------------------
 check('rankOps: sorted positions, only CHANGED ranks written (idempotent $set)', () => {
   const entries = [
-    { _id: 'a', totalKg: 300, ranks: { total: 1 } },
-    { _id: 'b', totalKg: 290, ranks: { total: 3 } }, // wrong → 2
-    { _id: 'c', totalKg: 280, ranks: { total: 3 } }, // right
+    { _id: 'a', user: 'u1', totalKg: 300, ranks: { total: 1 } },
+    { _id: 'b', user: 'u2', totalKg: 290, ranks: { total: 3 } }, // wrong → 2
+    { _id: 'c', user: 'u3', totalKg: 280, ranks: { total: 3 } }, // right
   ];
   const ops = rankOps(entries, 'totalKg', (e) => e.ranks.total);
-  assert.deepStrictEqual(ops, [{ _id: 'b', rank: 2 }]);
+  // `from` and `user` ride along so rank-change notifications can tell a
+  // promotion from a demotion without recomputing the board. The property
+  // that matters is unchanged: only entries that actually moved appear.
+  assert.deepStrictEqual(ops, [{ _id: 'b', rank: 2, from: 3, user: 'u2' }]);
+});
+check('rankOps: a first appearance has from: null, so it is not reported as a climb', () => {
+  const entries = [{ _id: 'a', user: 'u1', totalKg: 300, ranks: { total: null } }];
+  const ops = rankOps(entries, 'totalKg', (e) => e.ranks.total);
+  assert.strictEqual(ops[0].from, null, 'a new entry would be announced as "you moved up"');
+  assert.strictEqual(ops[0].rank, 1);
 });
 check('rankOps triple-replay: once ranks are right, replay produces ZERO writes', () => {
   const entries = [
