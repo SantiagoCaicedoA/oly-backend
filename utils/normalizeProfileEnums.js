@@ -139,4 +139,7 @@ function normalizeProfilePayload(obj) {
   return obj;
 }
 
-module.exports = { normalizeProfilePayload, strengthStatsToSectioned };
+// Exported so a check can assert it stays in step with utils/liftCatalog.
+// These keys are baked into production User documents; adding a lift to one
+// list and not the other breaks the profile-to-post correspondence silently.
+module.exports = { normalizeProfilePayload, strengthStatsToSectioned, STRENGTH_SECTIONS };
