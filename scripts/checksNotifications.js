@@ -221,4 +221,65 @@ step('a suppressed notification is still a notification', () => {
   assert.ok(Notification.schema.paths.readAt, 'no read state, so the bell cannot work');
 });
 
+console.log('\n=== the triggers ===\n');
+
+const fs = require('fs');
+const path = require('path');
+const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+
+step('every trigger is wired, and to the right recipient', () => {
+  // Greps rather than runtime, because these are one-line calls inside
+  // controllers that need a database to reach. A missing one is silent: the
+  // feature simply never fires and nobody reports a bug.
+  const posts = read('controllers/postController.js');
+  assert.ok(/notify\(post\.user, 'like'/.test(posts), 'likes notify nobody');
+  assert.ok(/const recipient = parent \? parent\.user : post\.user/.test(posts),
+    'a reply notifies the post author instead of the person replied to');
+
+  const follows = read('controllers/followController.js');
+  assert.ok(/'follow_request' : 'follow'/.test(follows), 'follows notify nobody');
+  assert.ok(/if \(created\)/.test(follows),
+    'a repeat follow tap would notify again');
+
+  const review = read('controllers/reviewController.js');
+  assert.ok(/'lift_verified' : 'lift_rejected'/.test(review), 'review decisions notify nobody');
+
+  const renumber = read('services/renumber.js');
+  assert.ok(/announceRankChanges/.test(renumber), 'rank changes notify nobody');
+});
+
+step('rank changes are announced from the DRAIN, never from a rebuild', () => {
+  // rebuildBoards calls renumberPartition too. If it announced, a rebuild
+  // would tell every athlete in the sport that they moved.
+  const renumber = read('services/renumber.js');
+  const { renumberPartition } = require('../services/renumber');
+  assert.ok(!/renumberPartition[\s\S]{0,800}await notify\(/.test(renumber),
+    'renumberPartition notifies directly, so a rebuild would spam everyone');
+  assert.ok(/const \{ changes \} = await renumberPartition/.test(renumber),
+    'the drain does not read the changes');
+  assert.strictEqual(typeof renumberPartition, 'function');
+});
+
+step('a notification is only sent after the board write has committed', () => {
+  const renumber = read('services/renumber.js');
+  const save = renumber.indexOf('await event.save();\n      drained++;');
+  const announce = renumber.indexOf('await announceRankChanges');
+  assert.ok(save > 0 && announce > save,
+    'rank changes are announced before the event is marked done, so a retry re-announces');
+
+  const review = read('controllers/reviewController.js');
+  const tx = review.indexOf('await runBoardTransaction');
+  const n = review.indexOf("notify(lift.user,");
+  assert.ok(tx > 0 && n > tx,
+    'a lift decision is announced inside the transaction, so a rollback still buzzes the phone');
+});
+
+step('the board notification is one per change, not six', () => {
+  // Three metrics times two scopes would mean six notifications for one
+  // lift, which is how a useful trigger becomes a muted one.
+  const renumber = read('services/renumber.js');
+  assert.ok(/key === 'total' && scopeKey === 'alltime'/.test(renumber),
+    'rank notifications are not narrowed to one metric and one scope');
+});
+
 console.log(`\n${passed} passed${process.exitCode ? ', SOME FAILED' : ''}`);

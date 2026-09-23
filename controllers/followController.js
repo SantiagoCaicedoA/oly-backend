@@ -5,6 +5,7 @@ const User = require('../models/User');
 const USER_PUBLIC_FIELDS = 'name username profile_image_url profile.country';
 
 const { areBlocked, canViewProfileOf } = require('../services/blocks');
+const { notify } = require('../services/notifications');
 
 // Every list and count filters on this. Spelled as a constant so a future
 // status ('rejected', say) cannot quietly start counting as a follower.
@@ -71,6 +72,15 @@ async function followUser(req, res, next) {
       ? status
       : ((await Follow.findOne({ follower: me, following: userId }).select('status').lean()) || {})
           .status || 'accepted';
+
+    // Only on the edge that was just created. Re-tapping Follow must not
+    // notify again, which is what `created` guards.
+    if (created) {
+      notify(userId, state === 'pending' ? 'follow_request' : 'follow', {
+        actor: req.user,
+        data: { userId: String(me) },
+      });
+    }
 
     res.status(created ? 201 : 200).json({
       success: true,
@@ -375,6 +385,12 @@ async function approveFollowRequest(req, res, next) {
     if (!result.matchedCount) {
       return res.status(404).json({ success: false, message: 'No pending request from that user.' });
     }
+    // The requester has been waiting on a decision, so tell them it landed.
+    // Reuses the 'follow' type: from their side, they now follow someone.
+    notify(userId, 'follow', {
+      actor: req.user,
+      data: { userId: String(req.user._id), approved: true },
+    });
     res.status(200).json({ success: true, message: 'Request approved.' });
   } catch (error) {
     next(error);
