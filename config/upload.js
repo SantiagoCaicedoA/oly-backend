@@ -4,7 +4,10 @@ const multer = require('multer');
 
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'images');
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+// GIF is deliberately absent. Nothing here can strip a GIF comment or
+// application extension, and writing a fourth hand-rolled parser to clean a
+// format no camera produces is not worth the bugs.
+const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
 
 // Ensure upload directory exists
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -17,7 +20,7 @@ const storage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const ext = (path.extname(file.originalname) || '.jpg').toLowerCase();
-    const safeExt = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext) ? ext : '.jpg';
+    const safeExt = ['.jpg', '.jpeg', '.png', '.webp'].includes(ext) ? ext : '.jpg';
     const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}${safeExt}`;
     cb(null, unique);
   },

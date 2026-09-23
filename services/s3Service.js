@@ -12,7 +12,45 @@ const s3Client = new S3Client({
   },
 });
 
-const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const { stripImageMetadata } = require('../utils/stripImageMetadata');
+const { stripVideoMetadata } = require('../utils/stripVideoMetadata');
+
+/**
+ * The only way anything reaches S3 from this service.
+ *
+ * Every upload is cleaned of metadata first. Phone cameras write GPS into
+ * EXIF and into the QuickTime container, and these objects land on public
+ * URLs, so an athlete filming in a home gym would otherwise publish their
+ * address to anyone who downloads the file.
+ *
+ * It is one function on purpose. When each upload helper did its own
+ * PutObjectCommand, the sixth one added in six months would have quietly
+ * skipped this step. Now there is nowhere else to write to.
+ */
+async function putClean(bucket, key, buffer, mimeType) {
+  let body = buffer;
+  if (String(mimeType).startsWith('video/')) {
+    // Throws if it cannot be cleaned. A video that keeps its coordinates is
+    // worse than an upload the athlete has to retry.
+    body = await stripVideoMetadata(buffer, mimeType);
+  } else if (String(mimeType).startsWith('image/')) {
+    body = stripImageMetadata(buffer, mimeType);
+  }
+
+  await s3Client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: body,
+      ContentType: mimeType,
+    })
+  );
+}
+
+// GIF is deliberately absent. Nothing here can strip a GIF comment or
+// application extension, and writing a fourth hand-rolled parser to clean a
+// format no camera produces is not worth the bugs.
+const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
 const MIME_TO_EXT = {
   'image/jpeg': '.jpg',
   'image/png': '.png',
@@ -35,14 +73,7 @@ async function uploadProfileImage(buffer, mimeType, userId) {
   const ext = MIME_TO_EXT[mimeType] || '.jpg';
   const key = `profiles/${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 9)}${ext}`;
 
-  await s3Client.send(
-    new PutObjectCommand({
-      Bucket: imageBucket,
-      Key: key,
-      Body: buffer,
-      ContentType: mimeType,
-    })
-  );
+  await putClean(imageBucket, key, buffer, mimeType);
 
   const url = `https://${imageBucket}.s3.${region}.amazonaws.com/${key}`;
   return url;
@@ -71,14 +102,7 @@ async function uploadVideo(buffer, mimeType, userId) {
   const ext = VIDEO_MIME_TO_EXT[mimeType] || '.mp4';
   const key = `videos/${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 9)}${ext}`;
 
-  await s3Client.send(
-    new PutObjectCommand({
-      Bucket: videoBucket,
-      Key: key,
-      Body: buffer,
-      ContentType: mimeType,
-    })
-  );
+  await putClean(videoBucket, key, buffer, mimeType);
 
   const url = `https://${videoBucket}.s3.${region}.amazonaws.com/${key}`;
   return url;
@@ -96,14 +120,7 @@ async function uploadProfileVideo(buffer, mimeType, userId) {
   const ext = VIDEO_MIME_TO_EXT[mimeType] || '.mp4';
   const key = `profiles/${userId}/video/${Date.now()}-${Math.random().toString(36).slice(2, 9)}${ext}`;
 
-  await s3Client.send(
-    new PutObjectCommand({
-      Bucket: videoBucket,
-      Key: key,
-      Body: buffer,
-      ContentType: mimeType,
-    })
-  );
+  await putClean(videoBucket, key, buffer, mimeType);
 
   const url = `https://${videoBucket}.s3.${region}.amazonaws.com/${key}`;
   return url;
@@ -120,14 +137,7 @@ async function uploadPostVideo(buffer, mimeType, userId) {
   const ext = VIDEO_MIME_TO_EXT[mimeType] || '.mp4';
   const key = `posts/${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 9)}${ext}`;
 
-  await s3Client.send(
-    new PutObjectCommand({
-      Bucket: videoBucket,
-      Key: key,
-      Body: buffer,
-      ContentType: mimeType,
-    })
-  );
+  await putClean(videoBucket, key, buffer, mimeType);
 
   const url = `https://${videoBucket}.s3.${region}.amazonaws.com/${key}`;
   return url;
@@ -144,14 +154,7 @@ async function uploadPostThumbnail(buffer, mimeType, userId) {
   const ext = MIME_TO_EXT[mimeType] || '.jpg';
   const key = `posts/${userId}/thumbnails/${Date.now()}-${Math.random().toString(36).slice(2, 9)}${ext}`;
 
-  await s3Client.send(
-    new PutObjectCommand({
-      Bucket: imageBucket,
-      Key: key,
-      Body: buffer,
-      ContentType: mimeType,
-    })
-  );
+  await putClean(imageBucket, key, buffer, mimeType);
 
   const url = `https://${imageBucket}.s3.${region}.amazonaws.com/${key}`;
   return url;

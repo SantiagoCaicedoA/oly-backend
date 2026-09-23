@@ -5,6 +5,7 @@ const Like = require('../models/Like');
 const Comment = require('../models/Comment');
 const Follow = require('../models/Follow');
 const { uploadPostVideo, uploadPostThumbnail } = require('../services/s3Service');
+const { stripImageMetadata, sniffImageType } = require('../utils/stripImageMetadata');
 
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'images');
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -160,11 +161,19 @@ class PostController {
             errors: [{ field: 'image', message: 'Image must be 5MB or less' }],
           });
         }
-        const ext = (path.extname(imageFile.originalname) || '.jpg').toLowerCase();
-        const safeExt = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext) ? ext : '.jpg';
+        // Name the file after what it actually IS, not what it was called.
+        // A JPEG uploaded as "lift.gif" was being stored as .gif and served
+        // with a mismatched content type.
+        const cleaned = stripImageMetadata(imageFile.buffer, imageFile.mimetype);
+        const safeExt = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' }[
+          sniffImageType(cleaned)
+        ] || '.jpg';
         const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}${safeExt}`;
         if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-        fs.writeFileSync(path.join(UPLOAD_DIR, filename), imageFile.buffer);
+        // Must go through the stripper like every other upload. This path
+        // wrote the raw camera buffer straight to a public /uploads URL, so a
+        // post photo kept its GPS while every S3 upload was being cleaned.
+        fs.writeFileSync(path.join(UPLOAD_DIR, filename), cleaned);
         body.image_url = `/uploads/images/${filename}`;
       } else {
         body.image_url = body.image_url || '';
