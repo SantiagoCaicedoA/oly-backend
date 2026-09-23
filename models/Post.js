@@ -13,7 +13,17 @@ const PostSchema = new Schema(
     thumbnail_url: { type: String, default: '' }, // optional: upload (field "thumbnail") or thumbnail_url in body – shown in feed
 
     // Frontend: lift name (e.g. "Clean & Jerk")
+    // Display text ONLY. Never matched on. Two spellings of one lift is how
+    // "best clean and jerk" ended up finding half of them.
     lift_name: { type: String, default: '' },
+    // The canonical id from utils/liftCatalog. Everything that queries by
+    // lift keys off this. Null means the name could not be resolved, which
+    // is deliberate: a gap is visible, a wrong guess is not.
+    lift_id: { type: String, default: null },
+    // When the athlete actually stood on the scale, not when they posted.
+    // Without it there is no way to tell a fresh weigh-in from a year-old
+    // one, and it is the field the top-10 verification will hang off.
+    bodyweight_recorded_at: { type: Date, default: null },
     // Opinion (user's notes/comment)
     opinion: { type: String, default: '' },
     // Frontend session_detail object (stored as-is)
@@ -56,6 +66,12 @@ const PostSchema = new Schema(
 PostSchema.index({ visibility: 1, status: 1, createdAt: -1 });
 // feed=all adds authorPrivate to that same predicate.
 PostSchema.index({ authorPrivate: 1, visibility: 1, status: 1, createdAt: -1 });
+// Badge rules ask "this athlete's posts of this lift, newest first".
+PostSchema.index({ user: 1, lift_id: 1, createdAt: -1 });
+// Cross-athlete lift lookups. Partial, because until the backfill runs (and
+// permanently for names the catalogue cannot resolve) most rows are null, and
+// an index whose commonest value is null is mostly dead weight.
+PostSchema.index({ lift_id: 1 }, { partialFilterExpression: { lift_id: { $type: 'string' } } });
 PostSchema.index({ user: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Post', PostSchema);

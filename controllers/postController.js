@@ -7,6 +7,7 @@ const Follow = require('../models/Follow');
 const { uploadPostVideo, uploadPostThumbnail } = require('../services/s3Service');
 const { stripImageMetadata, sniffImageType } = require('../utils/stripImageMetadata');
 const { blockedIdSet } = require('../services/blocks');
+const { resolveLiftId, isLiftId, displayName } = require('../utils/liftCatalog');
 
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'images');
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -109,6 +110,61 @@ function normalizePostBody(body) {
   if (out.lift_name != null) out.lift_name = String(out.lift_name).trim();
   if (out.opinion != null) out.opinion = String(out.opinion).trim();
 
+  // updatePost does Object.assign(post, body), so anything left on `out` is
+  // written to the document. The rule these two blocks follow is: never lower
+  // information we did not actually receive. If we cannot work out a value,
+  // we DELETE the key so the stored one survives, rather than assigning null.
+  //
+  // The earlier version only guarded the missing-key case, so an edit sending
+  // `lift_id: ''` (any client that serialises an unset field to an empty
+  // string) or an id this server does not know still wiped the lift off a
+  // post whose lift_name was right there in the same document.
+  {
+    const usable = (v) => typeof v === 'string' && v !== '';
+    const fromId = usable(out.lift_id)
+      ? (isLiftId(out.lift_id) ? out.lift_id : resolveLiftId(out.lift_id))
+      : null;
+    const fromName = resolveLiftId(out.lift_name);
+    const resolved = fromId || fromName;
+
+    if (resolved) {
+      out.lift_id = resolved;
+      // Only fill a name the caller actually cleared. On a partial edit
+      // lift_name is absent, and overwriting it would replace an athlete's
+      // own "Hang Snatch @ 92%" with a bare "Snatch".
+      if ('lift_name' in out && !out.lift_name) out.lift_name = displayName(resolved);
+    } else if (typeof out.lift_name === 'string' && out.lift_name !== '') {
+      // A name we genuinely cannot resolve. Storing null is correct here: the
+      // caller told us what the lift is and it is not one we know.
+      out.lift_id = null;
+    } else {
+      delete out.lift_id;
+    }
+  }
+
+  // Same rule for the weigh-in date, and the same trap. `??` only falls
+  // through on null and undefined, so an empty string used to win over a real
+  // date sitting in session_detail, and Mongoose then cast that '' to null on
+  // the document, destroying an existing weigh-in with no error.
+  {
+    const usable = (v) => (v === '' || v === 0 || v == null ? undefined : v);
+    const sd = out.session_detail && typeof out.session_detail === 'object'
+      ? out.session_detail
+      : null;
+    const raw = usable(out.bodyweight_recorded_at) ?? usable(sd && sd.bodyweight_recorded_at);
+    const d = raw === undefined ? null : new Date(raw);
+    if (d && !isNaN(d.getTime()) && d <= new Date()) {
+      out.bodyweight_recorded_at = d;
+    } else {
+      // Nothing usable. That includes a future date, which is a client clock
+      // problem rather than data, and unparseable junk. Deleting the key
+      // ignores it; assigning null would let one bad clock destroy a real
+      // weigh-in. On create there is nothing to preserve and the field
+      // defaults to null anyway, so deleting is right in both cases.
+      delete out.bodyweight_recorded_at;
+    }
+  }
+
   // Remove frontend-only keys so we don't store them as top-level
   delete out.is_private;
   delete out.is_public;
@@ -131,6 +187,8 @@ function postToFrontendFormat(post) {
     is_private: !isPublic,
     is_public: isPublic,
     lift_name: p.lift_name || '',
+    lift_id: p.lift_id || null,
+    bodyweight_recorded_at: p.bodyweight_recorded_at || null,
     opinion: p.opinion || '',
     context_value: p.context_value || '',
     session_detail: p.session_detail || null,
@@ -233,6 +291,8 @@ class PostController {
         // Copied from the author at write time; the settings write sweeps
         // existing posts when this changes.
         authorPrivate: !!(req.user && req.user.privacy && req.user.privacy.accountPrivate === true),
+        lift_id: body.lift_id || null,
+        bodyweight_recorded_at: body.bodyweight_recorded_at || null,
         status: body.status === 'PUBLISHED' ? 'PUBLISHED' : 'DRAFT',
       });
 
@@ -852,4 +912,13 @@ class PostController {
   }
 }
 
-module.exports = new PostController();
+const controller = new PostController();
+
+// Exported for the check suites. They used to pull normalizePostBody out of
+// this file with a regex and run it with stubbed dependencies, which meant
+// they were testing a copy: the stub for parseSessionDetail threw where the
+// real one returns null, and nothing ever reached Mongoose's casting, which
+// is where the bodyweight wipe actually happened.
+controller.__test = { normalizePostBody, parseSessionDetail, postToFrontendFormat, mergeJsonPayload };
+
+module.exports = controller;

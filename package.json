@@ -14,7 +14,8 @@
     "accept:writepath": "node scripts/acceptWritePath.js",
     "check:privacy": "node scripts/checksPrivacy.js",
     "check:metadata": "node scripts/checksMetadataStrip.js",
-    "check": "npm run check:leaderboard && npm run check:writepath && npm run check:privacy && npm run check:metadata"
+    "check": "npm run check:leaderboard && npm run check:writepath && npm run check:privacy && npm run check:metadata && npm run check:lifts",
+    "check:lifts": "node scripts/checksLiftCatalog.js"
   },
   "keywords": [
     "express",
