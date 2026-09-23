@@ -134,6 +134,36 @@ const userSchema = new Schema(
     // Review-queue access (phase 2). Manual flag — one reviewer today; a
     // roles system is deliberately premature.
     isAdmin: { type: Boolean, default: false },
+    // Privacy settings. Every default is the permissive one: a new athlete is
+    // discoverable and rankable, because being seen IS the product. These
+    // control CONTACT and PROFILE DETAIL, never the leaderboard row itself —
+    // a rank is a result other athletes competed against, so it has no opt-out.
+    privacy: {
+      // Private account: new followers need approval and posts are visible
+      // only to accepted followers. Does not hide the leaderboard row.
+      accountPrivate: { type: Boolean, default: false },
+      // Enforced when messaging ships; stored now so the settings screen is
+      // not blocked on it. 'people-i-follow' is spelled out because plain
+      // 'following' reads both ways and the two meanings enforce opposite
+      // rules, which is a data migration to discover later.
+      allowMessagesFrom: {
+        type: String,
+        enum: ['everyone', 'people-i-follow', 'nobody'],
+        default: 'everyone',
+      },
+      // Both of these are phrased as HIDE, not SHOW, and that is deliberate.
+      // Every user created before this shipped has no `privacy` object at all,
+      // so the field reads as undefined. With `showClub`, the natural
+      // defensive spelling `user.privacy?.showClub` evaluated to false and
+      // hid the club for every existing athlete. Worded as `hideClub`, absent
+      // means permissive, which is what we want for all four fields.
+      //
+      // Hides the exact bodyweight. The weight CLASS still shows everywhere,
+      // because that is what the ranking is built on.
+      hideBodyweight: { type: Boolean, default: false },
+      // Hides club on the profile and on the athlete's leaderboard row.
+      hideClub: { type: Boolean, default: false },
+    },
     // Set when the account is deleted. The document survives because
     // Lift and BoardEntry reference it, so this is what marks the account
     // dead: auth, refresh and signin all refuse it, and buildIdentity

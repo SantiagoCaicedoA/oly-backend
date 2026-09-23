@@ -30,7 +30,12 @@ async function followUser(req, res, next) {
       return res.status(400).json({ success: false, message: 'You cannot follow yourself.' });
     }
 
-    const target = await User.findById(userId).select('_id');
+    // `privacy` is selected now, before enforcement needs it. An inclusive
+    // projection that omits it does NOT apply schema defaults, so the
+    // subdocument comes back undefined and `target.privacy.accountPrivate`
+    // throws rather than defaulting. Selecting it here means the approval
+    // branch can be added without a latent 500 waiting behind it.
+    const target = await User.findById(userId).select('_id privacy');
     if (!target) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
