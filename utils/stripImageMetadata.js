@@ -167,9 +167,15 @@ function stripImageMetadata(buffer, declaredMime) {
     throw new AppError(422, 'That image format is not supported. Use JPEG, PNG or WebP.');
   }
   if (declaredMime && declaredMime !== actual) {
-    // Not pedantry. A JPEG labelled image/png used to sail through the PNG
-    // stripper untouched, GPS and all, because the signature check bails.
-    throw new AppError(422, 'That file does not match its declared type.');
+    // Not an error. The app sends `asset.mimeType ?? 'image/jpeg'`, so a PNG
+    // picked on a device that reports no mime type arrives declared as JPEG,
+    // and rejecting it would break a working upload for a real person.
+    //
+    // The security problem was never the wrong LABEL, it was dispatching on
+    // it: a JPEG called image/png sailed through the PNG stripper untouched
+    // because the signature check bailed. Dispatching on sniffed bytes fixes
+    // that. Callers use sniffImageType() to correct the stored content type.
+    console.warn(`stripImageMetadata: declared ${declaredMime}, actually ${actual}`);
   }
 
   let cleaned = null;
