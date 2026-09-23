@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const userService = require('../services/userService');
 const { formatUserResponse } = require('../utils/profileResponse');
+const { canViewProfileOf } = require('../services/blocks');
 const { anonymizeUser } = require('../services/accountAnonymize');
 
 class UserController {
@@ -17,7 +18,7 @@ class UserController {
       res.status(200).json({
         success: true,
         count: users.length,
-        data: users.map((u) => formatUserResponse(u)),
+        data: users.map((u) => formatUserResponse(u, req.user && req.user._id)),
       });
     } catch (error) {
       next(error);
@@ -76,10 +77,17 @@ class UserController {
   async getUserById(req, res, next) {
     try {
       const { id } = req.params;
+      // Blocked, or private and not an approved follower, reads as missing.
+      // Without this every careful 404 elsewhere was undone by one call here.
+      if (!(await canViewProfileOf(req.user && req.user._id, id))) {
+        return res.status(404).json({ success: false, message: 'User not found.' });
+      }
       const user = await userService.getUserById(id);
       res.status(200).json({
         success: true,
-        data: formatUserResponse(user),
+        // Viewer-aware: this is the one user endpoint that regularly serves
+        // somebody else's profile.
+        data: formatUserResponse(user, req.user && req.user._id),
       });
     } catch (error) {
       next(error);

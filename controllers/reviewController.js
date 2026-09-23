@@ -57,6 +57,10 @@ async function identityForModeration(user) {
       sex: anyEntry.sex,
       birthYear: anyEntry.birthYear,
       anonymized: !!anyEntry.anonymized,
+    // Carried for the same reason `anonymized` is: an upsert that CREATES a
+    // row for a new weight class would otherwise take the schema default and
+    // publish a bodyweight the athlete hid.
+    hideBodyweight: !!anyEntry.hideBodyweight,
     };
   }
 }

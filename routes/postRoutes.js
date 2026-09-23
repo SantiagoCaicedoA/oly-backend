@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
 const postController = require('../controllers/postController');
+const postAccess = require('../middleware/postAccess');
 const auth = require('../middleware/auth');
 const { uploadPostMedia } = require('../config/upload');
 
@@ -119,6 +120,13 @@ router.post(
   postController.createPost
 );
 router.get('/', postController.getPosts);
+
+// Everything keyed by post id goes through the access gate. Declared once
+// here rather than called inside each handler, so a route added later cannot
+// quietly skip it. It lets your own posts and updatePost/deletePost through
+// untouched (those already check ownership).
+router.use('/:id', postAccess);
+
 router.get('/:id', postController.getPostById);
 router.put('/:id', postController.updatePost);
 router.delete('/:id', postController.deletePost);

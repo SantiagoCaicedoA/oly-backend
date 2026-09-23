@@ -77,6 +77,13 @@ const BoardEntrySchema = new Schema(
     // Set when the athlete deletes their account. The result stays on the
     // board (other athletes earned it), the identity does not.
     anonymized: { type: Boolean, default: false },
+    // Denormalised from User.privacy.hideBodyweight. The stored bodyweight
+    // fields stay populated because Sinclair and weight-class placement are
+    // computed from them; this only suppresses the number in the response.
+    // It has to live here rather than be looked up: the board is cached with
+    // no viewer in the key, so a per-row User read would be cached once and
+    // served to everyone.
+    hideBodyweight: { type: Boolean, default: false },
     countryCode: { type: String, required: true }, // IOC code
     sex: { type: String, enum: ['M', 'F'], required: true },
     birthYear: { type: Number, default: null }, // never exposed raw via the API

@@ -143,6 +143,11 @@ function entryToRow(entry, lift, rank) {
   if (lift === 'snatch') bodyweightKg = entry.snatchBwKg;
   else if (lift === 'cleanjerk') bodyweightKg = entry.cleanBwKg;
   else bodyweightKg = entry.totalBwKg;
+  // The athlete asked for the exact number not to be public. The weight CLASS
+  // stays, because that is what the ranking is built on and hiding it would
+  // make the row meaningless. Sinclair also stays: it is a score, not a
+  // bodyweight, even though one was used to compute it.
+  if (entry.hideBodyweight) bodyweightKg = null;
 
   return {
     rank,
@@ -348,7 +353,7 @@ async function getFriendsBoard(req, res) {
     const { scopeKey, season } = await resolveScopeKey(params.scope);
     const m = METRICS[params.lift];
 
-    const edges = await Follow.find({ follower: req.user._id })
+    const edges = await Follow.find({ follower: req.user._id, status: 'accepted' })
       .select('following')
       .limit(FOLLOW_CAP)
       .lean();
@@ -447,7 +452,11 @@ async function getAthleteCard(req, res) {
       Lift.find({ _id: { $in: liftIds } })
         .select('liftType weightKg bodyweightKg liftDate videoUrl pendingReview')
         .lean(),
-      Follow.exists({ follower: req.user._id, following: entry.user }),
+      // The edge, not a boolean. rank.tsx renders the follow button from
+      // this, and collapsing 'requested' into false made it a dead button.
+      Follow.findOne({ follower: req.user._id, following: entry.user })
+        .select('status')
+        .lean(),
     ]);
     const byId = Object.fromEntries(lifts.map((l) => [String(l._id), l]));
     // A deleted athlete keeps the RESULT (other lifters earned it) but must
@@ -455,11 +464,18 @@ async function getAthleteCard(req, res) {
     // s3Service has no delete path — so withhold the URL here, otherwise
     // "Former athlete" still ships with their face on video.
     const isAnon = !!entry.anonymized;
+    const hideBw = !!entry.hideBodyweight;
     const pick = (id) => {
       if (!id) return null;
       const lift = byId[String(id)] || null;
       if (!lift) return null;
-      return isAnon ? { ...lift, videoUrl: null } : lift;
+      // stats.bodyweightKg is nulled below, but the lift documents carry
+      // their own bodyweightKg, so the card was returning the exact number
+      // eight lines after hiding it.
+      const out = { ...lift };
+      if (isAnon) out.videoUrl = null;
+      if (hideBw) out.bodyweightKg = null;
+      return out;
     };
 
     return res.json({
@@ -474,11 +490,16 @@ async function getAthleteCard(req, res) {
         sex: entry.sex,
         weightClass: entry.weightClass,
         ageCategories: categoriesForBirthYear(entry.birthYear),
-        following: !!following,
+        following: !!following && following.status === 'accepted',
+        follow_state: !following
+          ? 'none'
+          : following.status === 'pending'
+            ? 'requested'
+            : 'following',
       },
       stats: {
         totalKg: entry.totalKg,
-        bodyweightKg: entry.totalBwKg,
+        bodyweightKg: entry.hideBodyweight ? null : entry.totalBwKg,
         sinclair: entry.sinclair,
         snatchKg: entry.totalSnatchKg,
         cleanKg: entry.totalCleanKg,
@@ -503,5 +524,6 @@ module.exports = {
   // exported for DB-free checks
   parseBoardParams,
   boardFilter,
+  entryToRow,
   METRICS,
 };
