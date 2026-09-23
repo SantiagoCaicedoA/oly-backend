@@ -158,8 +158,17 @@ const userSchema = new Schema(
       // hid the club for every existing athlete. Worded as `hideClub`, absent
       // means permissive, which is what we want for all four fields.
       //
-      // Hides the exact bodyweight. The weight CLASS still shows everywhere,
-      // because that is what the ranking is built on.
+      // Hides the exact bodyweight on the profile, the athlete card and the
+      // leaderboard row. The weight CLASS still shows, because that is what
+      // the ranking is built on.
+      //
+      // KNOWN LIMIT, and the UI copy must not overclaim: Sinclair is a
+      // closed-form function of total, bodyweight and sex, so a published
+      // Sinclair score plus a published total inverts back to bodyweight
+      // within about 0.3kg. Suppressing Sinclair instead would remove the
+      // athlete from the Sinclair board, and there is no opt-out from the
+      // board. So this setting means "not displayed", not "unknowable".
+      // Say that in the settings screen rather than implying secrecy.
       hideBodyweight: { type: Boolean, default: false },
       // Hides club on the profile and on the athlete's leaderboard row.
       hideClub: { type: Boolean, default: false },

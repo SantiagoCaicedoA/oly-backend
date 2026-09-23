@@ -33,7 +33,7 @@ function profileWithMediaUrls(profile) {
  * @param {Object} user - Mongoose user document or plain object.
  * @returns {Object|null}
  */
-function formatUserResponse(user) {
+function formatUserResponse(user, viewerId = null) {
   if (!user) return null;
   const userObj = typeof user.toObject === 'function' ? user.toObject() : { ...user };
 
@@ -47,6 +47,31 @@ function formatUserResponse(user) {
   if (userObj.profile) {
     userObj.profile = profileWithMediaUrls(userObj.profile);
   }
+
+  // Privacy applies to OTHER people's view, never your own. Called without a
+  // viewer it returns the full object, which is what /me and signin want; the
+  // viewer argument is what makes it safe for someone else's profile.
+  // `!viewerId` first, not `viewerId &&`. Getting this backwards meant a call
+  // with no viewer treated the OWNER as a stranger: nine endpoints including
+  // /users/me, signin and GET /api/profile hid an athlete's own club and
+  // bodyweight from themselves. Worse, the settings form seeds from that
+  // response, so an athlete in pounds who opened Edit Info and saved anything
+  // wrote bodyweight_unit back as kg while keeping the lbs number, which
+  // silently moved them to the wrong weight class.
+  const isSelf = !viewerId || String(viewerId) === String(userObj._id);
+  if (!isSelf && userObj.privacy) {
+    if (userObj.privacy.hideBodyweight === true && userObj.profile) {
+      // The weight class stays. It is what the athlete is ranked in, and the
+      // profile is meaningless without it.
+      delete userObj.profile.bodyweight_value;
+      delete userObj.profile.bodyweight_unit;
+    }
+    if (userObj.privacy.hideClub === true && userObj.profile) {
+      userObj.profile.club = null;
+    }
+  }
+  // Nobody else's settings are anyone else's business.
+  if (!isSelf) delete userObj.privacy;
 
   return userObj;
 }

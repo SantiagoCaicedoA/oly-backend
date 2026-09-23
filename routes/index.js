@@ -14,6 +14,9 @@ const seasonRoutes = require('./seasonRoutes');
 const athleteRoutes = require('./athleteRoutes');
 const liftRoutes = require('./liftRoutes');
 const reviewRoutes = require('./reviewRoutes');
+const blockRoutes = require('./blockRoutes');
+const privacyRoutes = require('./privacyRoutes');
+const reportRoutes = require('./reportRoutes');
 
 // API Routes
 router.use('/users', userRoutes);
@@ -30,6 +33,9 @@ router.use('/seasons', seasonRoutes);
 router.use('/athletes', athleteRoutes);
 router.use('/lifts', liftRoutes);
 router.use('/review', reviewRoutes);
+router.use('/blocks', blockRoutes);
+router.use('/privacy', privacyRoutes);
+router.use('/reports', reportRoutes);
 
 // Health check route — carries a deploy fingerprint so we can verify from
 // outside WHICH build is serving the domain and whether its node_modules

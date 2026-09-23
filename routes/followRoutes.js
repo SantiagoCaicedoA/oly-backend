@@ -7,6 +7,10 @@ const {
   getFollowers,
   getFollowing,
   getFollowStatus,
+  getFollowRequests,
+  approveFollowRequest,
+  declineFollowRequest,
+  removeFollower,
 } = require('../controllers/followController');
 
 router.use(auth);
@@ -15,6 +19,13 @@ router.use(auth);
 router.get('/followers', getFollowers); // ?userId= for another user's list (defaults to me)
 router.get('/following', getFollowing); // ?userId= for another user's list (defaults to me)
 router.get('/status/:userId', getFollowStatus);
+
+// Approval inbox for private accounts. These literal paths must stay above
+// '/:userId' too, or "requests" is parsed as a user id.
+router.get('/requests', getFollowRequests);
+router.post('/requests/:userId/approve', approveFollowRequest);
+router.delete('/requests/:userId', declineFollowRequest);
+router.delete('/followers/:userId', removeFollower);
 
 // Follow / unfollow
 router.post('/:userId', followUser);

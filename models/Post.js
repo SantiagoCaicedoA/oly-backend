@@ -27,6 +27,14 @@ const PostSchema = new Schema(
     effort: { type: String, default: '' },
 
     // Visibility: PRIVATE = "Just me", SHARED_WITH_FRIENDS = "Public"
+    // Denormalised from the author's User.privacy.accountPrivate.
+    //
+    // The feed cannot look this up per author: feed=all is the default and
+    // the app's home screen, so that would be one User read per post per
+    // page. Absent means public, which is why the filter is `$ne: true` and
+    // why no backfill is needed for posts written before privacy existed.
+    // Kept in sync by the privacy settings write.
+    authorPrivate: { type: Boolean, default: false },
     visibility: {
       type: [String],
       enum: ['PRIVATE', 'SHARED_WITH_FRIENDS'],
@@ -46,6 +54,8 @@ const PostSchema = new Schema(
 // Feed queries: filter by visibility/status (+ user for feed=friends/mine), sort by newest.
 // Without these every feed request is a full collection scan that slows as posts grow.
 PostSchema.index({ visibility: 1, status: 1, createdAt: -1 });
+// feed=all adds authorPrivate to that same predicate.
+PostSchema.index({ authorPrivate: 1, visibility: 1, status: 1, createdAt: -1 });
 PostSchema.index({ user: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Post', PostSchema);

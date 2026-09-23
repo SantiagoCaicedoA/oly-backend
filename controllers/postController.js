@@ -6,6 +6,7 @@ const Comment = require('../models/Comment');
 const Follow = require('../models/Follow');
 const { uploadPostVideo, uploadPostThumbnail } = require('../services/s3Service');
 const { stripImageMetadata, sniffImageType } = require('../utils/stripImageMetadata');
+const { blockedIdSet } = require('../services/blocks');
 
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'images');
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -229,6 +230,9 @@ class PostController {
         intent: body.intent ?? '',
         effort: body.effort ?? '',
         visibility: Array.isArray(body.visibility) ? body.visibility : ['PRIVATE'],
+        // Copied from the author at write time; the settings write sweeps
+        // existing posts when this changes.
+        authorPrivate: !!(req.user && req.user.privacy && req.user.privacy.accountPrivate === true),
         status: body.status === 'PUBLISHED' ? 'PUBLISHED' : 'DRAFT',
       });
 
@@ -272,12 +276,34 @@ class PostController {
       // Friends feed: people I follow + me. Mine: just me.
       let friendIds = null;
       if (feed === 'friends') {
-        const edges = await Follow.find({ follower: req.user._id }).select('following').lean();
+        // status matters here. Without it, a PENDING follow request would put
+        // a private account's posts into the requester's home feed, which is
+        // the exact thing the setting exists to prevent.
+        const edges = await Follow.find({ follower: req.user._id, status: 'accepted' })
+          .select('following')
+          .lean();
         friendIds = edges.map((e) => e.following);
         friendIds.push(req.user._id);
         filter.user = { $in: friendIds };
       } else if (feed === 'mine') {
         filter.user = req.user._id;
+      } else {
+        // feed=all. A private account's posts are for its accepted followers,
+        // and this branch is by definition everyone else. feed=friends does
+        // NOT get this: following a private account is exactly what earns you
+        // their posts.
+        filter.authorPrivate = { $ne: true };
+      }
+
+      // Anything not driven by the follow graph needs explicit block
+      // filtering. Blocking deletes the follow edges, so the friends feed is
+      // already covered; feed=all and the discovery backfill below are not,
+      // because they deliberately surface people you do not follow.
+      const blocked = feed === 'mine' ? new Set() : await blockedIdSet(req.user._id);
+      if (blocked.size && feed !== 'mine') {
+        filter.user = filter.user
+          ? { ...filter.user, $nin: [...blocked] }
+          : { $nin: [...blocked] };
       }
 
       const pageNum = Math.max(1, parseInt(page) || 1);
@@ -297,7 +323,11 @@ class PostController {
       if (feed === 'friends' && pageNum === 1 && posts.length < limitNum) {
         const backfill = await Post.find({
           ...filter,
-          user: { $nin: friendIds },
+          // Exclude people I already follow AND anyone blocked either way.
+          user: { $nin: [...friendIds, ...blocked] },
+          // This surfaces people you do NOT follow, so private accounts are
+          // out for the same reason as feed=all.
+          authorPrivate: { $ne: true },
         })
           .sort({ createdAt: -1 })
           .limit(limitNum - posts.length)

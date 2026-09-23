@@ -57,7 +57,10 @@ function buildIdentity(user) {
     // missing name would write through silently — always have one.
     name: p.display_name || user.name || 'Athlete',
     avatarUrl: p.profile_image_url || null,
-    club: p.club || null,
+    // Derived from privacy for the same reason `anonymized` is: a
+    // rebuildBoards run must not quietly put a hidden club back on the board.
+    // `=== true`, so a user with no privacy subdocument stays permissive.
+    club: user && user.privacy && user.privacy.hideClub === true ? null : (p.club || null),
     countryCode,
     sex,
     birthYear,
@@ -65,6 +68,7 @@ function buildIdentity(user) {
     // rebuildBoards run would drop the flag and the row would lose its
     // INACTIVE tag while still reading "Former athlete".
     anonymized: !!(user && user.anonymizedAt),
+    hideBodyweight: !!(user && user.privacy && user.privacy.hideBodyweight === true),
   };
 }
 
