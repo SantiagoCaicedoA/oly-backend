@@ -173,6 +173,21 @@ const userSchema = new Schema(
       // Hides club on the profile and on the athlete's leaderboard row.
       hideClub: { type: Boolean, default: false },
     },
+    // Notification preferences. Phrased as mute*, and every default is false,
+    // for the reason the privacy block learned the hard way: every existing
+    // user has no subdocument at all, so an absent field must mean the
+    // permissive thing. With `allowSocial: true` a defensive read would have
+    // switched notifications OFF for every athlete who never opened settings.
+    notifications: {
+      // Categories, not nine switches. Nobody wants to reason about whether
+      // a follow request is social.
+      muteSocial: { type: Boolean, default: false }, // likes, comments, follows
+      muteLifts: { type: Boolean, default: false }, // verified / not verified
+      muteRank: { type: Boolean, default: false }, // moved up, passed, proximity
+      // Quiet hours are ON unless turned off, so absent means protected.
+      quietHoursOff: { type: Boolean, default: false },
+    },
+
     // Set when the account is deleted. The document survives because
     // Lift and BoardEntry reference it, so this is what marks the account
     // dead: auth, refresh and signin all refuse it, and buildIdentity
