@@ -2,7 +2,7 @@
  * Versioned IWF bodyweight class tables.
  *
  * Classes change roughly each Olympic cycle (last revision effective
- * 2025-06-01), so entries never store a hardcoded label alone — they store
+ * 2026-08-01), so entries never store a hardcoded label alone — they store
  * the bodyweight and the class-set version, and labels are derived here.
  * A future IWF revision is a new table added to CLASS_TABLES, never a
  * migration of historical BoardEntries.
@@ -14,12 +14,17 @@ const CLASS_TABLES = {
     M: [60, 65, 71, 79, 88, 94, 110],
     F: [48, 53, 58, 63, 69, 77, 86],
   },
+  'v2026-08': {
+    // IWF senior & junior classes in force since 2026-08-01.
+    M: [60, 65, 70, 75, 85, 95, 110],
+    F: [49, 53, 57, 61, 69, 77, 86],
+  },
 };
 
-const CURRENT_CLASS_SET = 'v2025-06';
+const CURRENT_CLASS_SET = 'v2026-08';
 
 /**
- * Class label for a bodyweight, e.g. (80.4, 'M') -> "88", (112, 'M') -> "+110".
+ * Class label for a bodyweight, e.g. (80.4, 'M') -> "85", (112, 'M') -> "+110".
  * @param {number} bodyweightKg
  * @param {'M'|'F'} sex
  * @param {string} [version]
